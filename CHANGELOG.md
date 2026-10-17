@@ -6,6 +6,10 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-17
+
+First stable release. It includes everything in 0.1.0-preview1, plus the changes below.
+
 ### Added
 
 - `New-LinearIssue` and `Set-LinearIssue` warn when `-Estimate` is used in a team that does not
@@ -53,5 +57,6 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - Formatting views for issues, teams, users, workflow states, labels, projects, cycles, the
   connection and rate-limit status.
 
-[Unreleased]: https://github.com/stian3555/PSLinear/compare/v0.1.0-preview1...HEAD
+[Unreleased]: https://github.com/stian3555/PSLinear/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/stian3555/PSLinear/compare/v0.1.0-preview1...v0.1.0
 [0.1.0-preview1]: https://github.com/stian3555/PSLinear/releases/tag/v0.1.0-preview1
