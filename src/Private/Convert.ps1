@@ -469,11 +469,50 @@ function ConvertTo-LinearDocument {
     }
 }
 
+function ConvertTo-LinearAgentSession {
+    <#
+    .SYNOPSIS
+        Flattens an AgentSession node into a PSLinear.AgentSession object. Status is Pending,
+        Active, AwaitingInput, Stopping, Complete, Error or Stale.
+    #>
+    [CmdletBinding()]
+    [OutputType('PSLinear.AgentSession')]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [AllowNull()]
+        [object] $InputObject
+    )
+
+    process {
+        if ($null -eq $InputObject) { return }
+        $links = @(Get-LinearNestedValue -InputObject $InputObject -Name 'externalLinks' | Where-Object { $null -ne $_ })
+        [pscustomobject]@{
+            PSTypeName    = 'PSLinear.AgentSession'
+            Id            = $InputObject.id
+            Agent         = Get-LinearNestedValue -InputObject $InputObject -Name 'appUser.name'
+            Status        = ConvertFrom-LinearHealth -Value (Get-LinearNestedValue -InputObject $InputObject -Name 'status')
+            Issue         = Get-LinearNestedValue -InputObject $InputObject -Name 'issue.identifier'
+            Summary       = Get-LinearNestedValue -InputObject $InputObject -Name 'summary'
+            Creator       = Get-LinearNestedValue -InputObject $InputObject -Name 'creator.name'
+            CreatedAt     = Get-LinearNestedValue -InputObject $InputObject -Name 'createdAt'
+            StartedAt     = Get-LinearNestedValue -InputObject $InputObject -Name 'startedAt'
+            EndedAt       = Get-LinearNestedValue -InputObject $InputObject -Name 'endedAt'
+            DismissedAt   = Get-LinearNestedValue -InputObject $InputObject -Name 'dismissedAt'
+            Url           = Get-LinearNestedValue -InputObject $InputObject -Name 'url'
+            ExternalLinks = @($links | ForEach-Object { [pscustomobject]@{ Label = $_.label; Url = $_.url } })
+            AgentId       = Get-LinearNestedValue -InputObject $InputObject -Name 'appUser.id'
+            IssueId       = Get-LinearNestedValue -InputObject $InputObject -Name 'issue.id'
+            CreatorId     = Get-LinearNestedValue -InputObject $InputObject -Name 'creator.id'
+        }
+    }
+}
+
 function ConvertFrom-LinearHealth {
     <#
     .SYNOPSIS
-        Turns an API health value (onTrack, atRisk, offTrack) into the PowerShell spelling
-        (OnTrack, AtRisk, OffTrack). Returns $null for no health.
+        Turns a camelCase API value, such as a health (onTrack, atRisk, offTrack) or an agent
+        session status (awaitingInput), into the PowerShell spelling (OnTrack, AwaitingInput).
+        Returns $null for no value.
     #>
     [CmdletBinding()]
     [OutputType([string])]

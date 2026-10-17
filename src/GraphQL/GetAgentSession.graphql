@@ -1,0 +1,5 @@
+query GetAgentSession($id: String!) {
+  agentSession(id: $id) {
+    ...AgentSessionFields
+  }
+}

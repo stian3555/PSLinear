@@ -1,0 +1,27 @@
+fragment AgentSessionFields on AgentSession {
+  id
+  status
+  summary
+  url
+  createdAt
+  updatedAt
+  startedAt
+  endedAt
+  dismissedAt
+  appUser {
+    id
+    name
+  }
+  creator {
+    id
+    name
+  }
+  issue {
+    id
+    identifier
+  }
+  externalLinks {
+    label
+    url
+  }
+}
