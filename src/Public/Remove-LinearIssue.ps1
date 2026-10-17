@@ -1,19 +1,26 @@
 function Remove-LinearIssue {
     <#
     .SYNOPSIS
-        Archives Linear issues, or moves them to the trash with -Delete.
+        Moves Linear issues to the trash, or archives them with -Archive.
 
     .DESCRIPTION
-        By default, archives the issues: they disappear from views but keep their history
-        and can be restored at any time. With -Delete, the issues are moved to the trash
-        instead, where they can be restored for 30 days before Linear deletes them for good.
+        By default, moves the issues to the trash, which is what deleting an issue does in
+        the Linear app. Trashed issues can be restored from the trash in Linear for 30 days,
+        after which Linear deletes them for good.
 
-        Issues are given by identifier (ENG-123) or piped in from Get-LinearIssue. The
-        command asks for confirmation for each issue; use -Confirm:$false to skip that, or
-        -WhatIf to see what would happen without sending anything.
+        With -Archive, the issues are archived instead. Linear normally archives closed
+        issues by itself and offers no manual archive in the app; archiving by hand skips
+        the checks Linear's auto-archive makes (such as open sub-issues), and archived
+        issues disappear from lists and search. Prefer closing an issue with
+        Set-LinearIssue -State, or trashing it, unless you need it out of the way without
+        either.
 
-        A missing issue, or one Linear refuses to archive or delete, writes a non-terminating
-        error and the remaining issues are still processed. Nothing is returned.
+        Issues are given by identifier (ENG-123) or piped in from Get-LinearIssue.
+        The command asks for confirmation for each issue; use -Confirm:$false to skip that,
+        or -WhatIf to see what would happen without sending anything.
+
+        A missing issue, or one Linear refuses to remove, writes a non-terminating error and
+        the remaining issues are still processed. Nothing is returned.
 
         To restore an archived issue outside the Linear app, run:
         Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { success } }' -Variables @{ id = 'ENG-123' }
@@ -24,24 +31,23 @@ function Remove-LinearIssue {
     .PARAMETER InputObject
         PSLinear.Issue objects to remove, typically from Get-LinearIssue.
 
-    .PARAMETER Delete
-        Moves the issues to the trash instead of archiving them. Trashed issues can be
-        restored in Linear for 30 days.
+    .PARAMETER Archive
+        Archives the issues instead of moving them to the trash.
 
     .EXAMPLE
         Remove-LinearIssue ENG-123
 
-        Archives one issue, after asking for confirmation.
+        Moves one issue to the trash, after asking for confirmation.
 
     .EXAMPLE
-        Get-LinearIssue -Team ENG -StateType Canceled -All | Remove-LinearIssue -Confirm:$false
+        Get-LinearIssue -Team ENG -Label Spam -All | Remove-LinearIssue -Confirm:$false
 
-        Archives every canceled issue in the team without prompting.
+        Moves every issue with the Spam label to the trash without prompting.
 
     .EXAMPLE
-        Remove-LinearIssue ENG-124, ENG-125 -Delete -WhatIf
+        Remove-LinearIssue ENG-124, ENG-125 -Archive -WhatIf
 
-        Shows which issues would be moved to the trash, without changing them.
+        Shows which issues would be archived, without changing them.
 
     .INPUTS
         System.String
@@ -55,6 +61,9 @@ function Remove-LinearIssue {
 
     .LINK
         Set-LinearIssue
+
+    .LINK
+        https://linear.app/docs/delete-archive-issues
     #>
     [CmdletBinding(DefaultParameterSetName = 'ById', SupportsShouldProcess, ConfirmImpact = 'High')]
     [OutputType([void])]
@@ -68,23 +77,23 @@ function Remove-LinearIssue {
         [PSTypeName('PSLinear.Issue')]
         [object[]] $InputObject,
 
-        [switch] $Delete
+        [switch] $Archive
     )
 
     begin {
-        if ($Delete) {
-            $query = Get-LinearGraphQLDocument -Name 'DeleteIssue'
-            $successPath = 'issueDelete.success'
-            $action = 'Delete issue (move it to the trash for 30 days)'
-            $failureVerb = 'delete'
-            $errorId = 'PSLinear.IssueDeleteFailed'
-        }
-        else {
+        if ($Archive) {
             $query = Get-LinearGraphQLDocument -Name 'ArchiveIssue'
             $successPath = 'issueArchive.success'
             $action = 'Archive issue'
             $failureVerb = 'archive'
             $errorId = 'PSLinear.IssueArchiveFailed'
+        }
+        else {
+            $query = Get-LinearGraphQLDocument -Name 'DeleteIssue'
+            $successPath = 'issueDelete.success'
+            $action = 'Move issue to the trash (restorable for 30 days)'
+            $failureVerb = 'delete'
+            $errorId = 'PSLinear.IssueDeleteFailed'
         }
     }
 

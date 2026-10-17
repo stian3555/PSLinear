@@ -29,7 +29,8 @@ ENG-398      Todo             Medium      Ada Lovelace         Document the depl
   and user names, or `me`. Lookups are cached, and an unknown name fails with a list of the
   valid values.
 - **Safe changes.** `New-`, `Set-` and `Remove-LinearIssue` support `-WhatIf` (which sends
-  nothing at all) and `-Confirm`. `Remove-LinearIssue` archives by default and asks first.
+  nothing at all) and `-Confirm`. `Remove-LinearIssue` asks first and moves issues to the
+  trash, where they can be restored for 30 days.
 - **Automatic paging.** Results stream page by page. `-First` sets a limit; `-All` follows
   pagination to the end. Stopping early (`| Select-Object -First 5`) stops the requests too.
 - **Handles the API's rules for you.** Retries rate-limited requests, server errors and
@@ -121,8 +122,8 @@ Get-LinearIssue -Team ENG -Label Bug -Unassigned | Set-LinearIssue -Assignee 'gr
 # Preview a bulk change without sending anything
 Get-LinearIssue -Assignee me -State 'In Review' | Set-LinearIssue -State Done -WhatIf
 
-# Archive canceled issues (asks per issue unless -Confirm:$false); -Delete moves to the trash instead
-Get-LinearIssue -Team ENG -StateType Canceled -All | Remove-LinearIssue
+# Move issues to the trash (asks per issue unless -Confirm:$false); -Archive archives instead
+Get-LinearIssue -Team ENG -Label Spam -All | Remove-LinearIssue
 
 # Anything else: raw GraphQL, with -WhatIf for mutations
 Invoke-LinearGraphQL -Query '{ viewer { assignedIssues(first: 5) { nodes { identifier title } } } }'
@@ -140,7 +141,7 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { 
 | `Get-LinearIssue` | Issues by identifier, or filtered lists with paging. |
 | `New-LinearIssue` | Create an issue, with states, labels, projects and users given by name. |
 | `Set-LinearIssue` | Change issues: state, assignee, labels (replace, add or remove), priority and more. |
-| `Remove-LinearIssue` | Archive issues, or move them to the trash with `-Delete`. |
+| `Remove-LinearIssue` | Move issues to the trash, or archive them with `-Archive`. |
 | `Get-LinearRateLimit` | Rate-limit status from the latest response. |
 | `Invoke-LinearGraphQL` | Run any GraphQL query or mutation. |
 

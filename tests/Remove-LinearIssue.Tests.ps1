@@ -15,7 +15,7 @@ Describe 'Remove-LinearIssue' {
             $field = if ($request.query -match 'mutation DeleteIssue') { 'issueDelete' } else { 'issueArchive' }
             switch ($request.variables.id) {
                 'ENG-404' {
-                    New-LinearTestResponse -Data @{ $field = $null } -Errors @(New-LinearTestError -Message 'Entity not found: Issue' -Code 'INVALID_INPUT')
+                    New-LinearTestResponse -Data @{ $field = $null } -Errors @(New-LinearTestError -Message 'Entity not found: Issue' -Code 'INPUT_ERROR')
                 }
                 'ENG-500' {
                     New-LinearTestResponse -Data @{ $field = @{ success = $false } }
@@ -28,17 +28,9 @@ Describe 'Remove-LinearIssue' {
     }
 
     Context 'Request' {
-        It 'archives the issue by default and returns nothing' {
+        It 'moves the issue to the trash by default, without deleting it permanently, and returns nothing' {
             Remove-LinearIssue ENG-1 -Confirm:$false | Should -BeNullOrEmpty
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly
-            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
-                $request = Get-RequestBody $Body
-                (Get-RequestOperation $Body) -eq 'ArchiveIssue' -and $request.variables.id -eq 'ENG-1'
-            }
-        }
-
-        It 'moves the issue to the trash with -Delete, without deleting it permanently' {
-            Remove-LinearIssue ENG-1 -Delete -Confirm:$false
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
                 $request = Get-RequestBody $Body
                 (Get-RequestOperation $Body) -eq 'DeleteIssue' -and
@@ -47,17 +39,25 @@ Describe 'Remove-LinearIssue' {
                 $request.query -notmatch 'permanentlyDelete'
             }
         }
+
+        It 'archives the issue with -Archive' {
+            Remove-LinearIssue ENG-1 -Archive -Confirm:$false
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                $request = Get-RequestBody $Body
+                (Get-RequestOperation $Body) -eq 'ArchiveIssue' -and $request.variables.id -eq 'ENG-1'
+            }
+        }
     }
 
     Context '-WhatIf' {
-        It 'sends no request when archiving' {
+        It 'sends no request when moving to the trash' {
             'ENG-1', 'ENG-2' | Remove-LinearIssue -WhatIf
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
         }
 
-        It 'sends no request when deleting' {
+        It 'sends no request when archiving' {
             $existing = [pscustomobject]@{ PSTypeName = 'PSLinear.Issue'; Id = 'issue-1'; Identifier = 'ENG-1' }
-            $existing | Remove-LinearIssue -Delete -WhatIf
+            $existing | Remove-LinearIssue -Archive -WhatIf
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
         }
     }
@@ -83,18 +83,18 @@ Describe 'Remove-LinearIssue' {
             'ENG-1', 'ENG-404', 'ENG-2' | Remove-LinearIssue -Confirm:$false -ErrorAction SilentlyContinue -ErrorVariable removeErrors
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 3 -Exactly
             $removeErrors.Count | Should -Be 1
-            $removeErrors[0].FullyQualifiedErrorId | Should -BeLike 'PSLinear.IssueArchiveFailed*'
-            $removeErrors[0].Exception.Message | Should -BeLike "Linear did not archive issue 'ENG-404'. Linear API error: Entity not found*"
+            $removeErrors[0].FullyQualifiedErrorId | Should -BeLike 'PSLinear.IssueDeleteFailed*'
+            $removeErrors[0].Exception.Message | Should -BeLike "Linear did not delete issue 'ENG-404'. Linear API error: Entity not found*"
             $removeErrors[0].TargetObject | Should -Be 'ENG-404'
         }
     }
 
     Context 'Errors' {
-        It 'writes one error when Linear does not report success for -Delete' {
-            Remove-LinearIssue ENG-500 -Delete -Confirm:$false -ErrorAction SilentlyContinue -ErrorVariable removeErrors
+        It 'writes one error when Linear does not report success for -Archive' {
+            Remove-LinearIssue ENG-500 -Archive -Confirm:$false -ErrorAction SilentlyContinue -ErrorVariable removeErrors
             $removeErrors.Count | Should -Be 1
-            $removeErrors[0].FullyQualifiedErrorId | Should -BeLike 'PSLinear.IssueDeleteFailed*'
-            $removeErrors[0].Exception.Message | Should -Be "Linear did not delete issue 'ENG-500'."
+            $removeErrors[0].FullyQualifiedErrorId | Should -BeLike 'PSLinear.IssueArchiveFailed*'
+            $removeErrors[0].Exception.Message | Should -Be "Linear did not archive issue 'ENG-500'."
         }
 
         It 'still stops on authentication failures' {

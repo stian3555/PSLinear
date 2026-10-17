@@ -18,7 +18,7 @@ Describe 'Set-LinearIssue' {
             if ($null -ne $lookup) { return $lookup }
 
             $issueId = $request.variables.id
-            $notFound = New-LinearTestError -Message 'Entity not found: Issue' -Code 'INVALID_INPUT'
+            $notFound = New-LinearTestError -Message 'Entity not found: Issue' -Code 'INPUT_ERROR'
             if ($request.query -match 'query GetIssueTeam') {
                 if ($issueId -eq 'ENG-404') {
                     return New-LinearTestResponse -Data @{ issue = $null } -Errors @($notFound)
