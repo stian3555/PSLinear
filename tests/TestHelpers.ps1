@@ -415,3 +415,115 @@ function Get-LinearTestCommentResponse {
     }
     $null
 }
+
+function New-LinearTestAttachmentNode {
+    param(
+        [string] $Id = 'attachment-1',
+        [string] $Title = 'screenshot.png',
+        [string] $Subtitle,
+        [string] $Url = 'https://uploads.linear.app/asset/screenshot.png',
+        [string] $Issue = 'ENG-1',
+        [string] $SourceType,
+        [string] $CreatedAt = '2026-10-10T10:00:00.000Z'
+    )
+    [ordered]@{
+        id         = $Id
+        title      = $Title
+        subtitle   = if ($Subtitle) { $Subtitle } else { $null }
+        url        = $Url
+        sourceType = if ($SourceType) { $SourceType } else { $null }
+        createdAt  = $CreatedAt
+        updatedAt  = $CreatedAt
+        creator    = @{ id = 'user-ada'; name = 'Ada Lovelace' }
+        issue      = @{ id = "issue-uuid-$Issue"; identifier = $Issue }
+    }
+}
+
+function Get-LinearTestAttachmentResponse {
+    # Serves the upload and attachment operations from a fixed set, or returns $null for any other request.
+    #
+    # Issues:      every identifier exists (UUID issue-uuid-<identifier>) except ENG-404.
+    # ENG-1:       attachment-2 (GitHub link) and the older attachment-1 (upload); returned out of order.
+    # Uploads:     the signed URL is https://storage.example/put/<file name>, the asset URL
+    #              https://uploads.linear.app/asset/<file name>. Linear returns two signed headers
+    #              (one value with a trailing space); for override.bin it also returns a content-type.
+    #              noupload.png gets no upload URL.
+    # Attachments: the title 'reject' is rejected; the attachment id 'missing' does not exist.
+    param([Parameter(Mandatory)][hashtable] $Request)
+
+    $query = $Request.query
+    $variables = if ($Request.ContainsKey('variables')) { $Request.variables } else { @{} }
+    $notFound = New-LinearTestError -Message 'Entity not found: Attachment' -Code 'INPUT_ERROR'
+    $attachments = @{
+        'attachment-1' = New-LinearTestAttachmentNode -Id 'attachment-1' -SourceType 'unknown' -CreatedAt '2026-10-09T09:00:00.000Z'
+        'attachment-2' = New-LinearTestAttachmentNode -Id 'attachment-2' -Title 'Fix login' -Url 'https://github.com/acme/app/pull/42' -SourceType 'github' -Subtitle 'PR #42'
+    }
+
+    if ($query -match 'query GetIssueTeam') {
+        if ($variables.id -eq 'ENG-404') {
+            return New-LinearTestResponse -Data @{ issue = $null } -Errors @(New-LinearTestError -Message 'Entity not found: Issue' -Code 'INPUT_ERROR')
+        }
+        return New-LinearTestResponse -Data @{ issue = @{ id = "issue-uuid-$($variables.id)"; identifier = $variables.id; team = @{ id = 'team-eng'; key = 'ENG' } } }
+    }
+    if ($query -match 'mutation RequestFileUpload') {
+        if ($variables.filename -eq 'noupload.png') {
+            return New-LinearTestResponse -Data @{ fileUpload = @{ success = $false; uploadFile = $null } }
+        }
+        $headers = @(
+            @{ key = 'x-goog-content-length-range'; value = "0,$($variables.size)" }
+            @{ key = 'Cache-Control'; value = 'public, max-age=31536000 ' }
+        )
+        if ($variables.filename -eq 'override.bin') { $headers += @{ key = 'content-type'; value = 'application/x-custom' } }
+        return New-LinearTestResponse -Data @{
+            fileUpload = @{
+                success    = $true
+                uploadFile = @{
+                    uploadUrl = "https://storage.example/put/$($variables.filename)"
+                    assetUrl  = "https://uploads.linear.app/asset/$($variables.filename)"
+                    headers   = $headers
+                }
+            }
+        }
+    }
+    if ($query -match 'mutation CreateAttachment') {
+        $attachmentInput = $variables.input
+        if ($attachmentInput['title'] -eq 'reject') {
+            return New-LinearTestResponse -Data @{ attachmentCreate = $null } -Errors @(New-LinearTestError -Message 'Argument Validation Error' -Code 'INPUT_ERROR')
+        }
+        $issue = $attachmentInput['issueId'] -replace '^issue-uuid-', ''
+        $node = New-LinearTestAttachmentNode -Id 'attachment-new' -Title $attachmentInput['title'] -Subtitle $attachmentInput['subtitle'] -Url $attachmentInput['url'] -Issue $issue
+        return New-LinearTestResponse -Data @{ attachmentCreate = @{ success = $true; attachment = $node } }
+    }
+    if ($query -match 'mutation LinkAttachmentUrl') {
+        if ($variables.issueId -eq 'ENG-404') {
+            return New-LinearTestResponse -Data @{ attachmentLinkURL = $null } -Errors @(New-LinearTestError -Message 'Entity not found: Issue' -Code 'INPUT_ERROR')
+        }
+        $title = if ($variables.ContainsKey('title')) { $variables.title } else { 'Title from Linear' }
+        $source = if ($variables.url -match 'github\.com') { 'github' } else { $null }
+        $node = New-LinearTestAttachmentNode -Id 'attachment-link' -Title $title -Url $variables.url -Issue $variables.issueId -SourceType $source
+        return New-LinearTestResponse -Data @{ attachmentLinkURL = @{ success = $true; attachment = $node } }
+    }
+    if ($query -match 'query ListIssueAttachments') {
+        if ($variables.id -eq 'ENG-404') {
+            return New-LinearTestResponse -Data $null -Errors @(New-LinearTestError -Message 'Entity not found: Issue' -Code 'INPUT_ERROR' -Path 'issue')
+        }
+        $nodes = if ($variables.id -in 'ENG-1', 'issue-uuid-ENG-1') { @($attachments['attachment-2'], $attachments['attachment-1']) } else { @() }
+        return New-LinearTestResponse -Data @{ issue = @{ attachments = New-LinearTestConnection -Nodes $nodes } }
+    }
+    if ($query -match 'query GetAttachment') {
+        if (-not $attachments.ContainsKey($variables.id)) { return New-LinearTestResponse -Data $null -Errors @($notFound) }
+        return New-LinearTestResponse -Data @{ attachment = $attachments[$variables.id] }
+    }
+    if ($query -match 'mutation UpdateAttachment') {
+        if (-not $attachments.ContainsKey($variables.id)) { return New-LinearTestResponse -Data @{ attachmentUpdate = $null } -Errors @($notFound) }
+        $node = $attachments[$variables.id]
+        $node['title'] = $variables.input['title']
+        if ($variables.input.Contains('subtitle')) { $node['subtitle'] = $variables.input['subtitle'] }
+        return New-LinearTestResponse -Data @{ attachmentUpdate = @{ success = $true; attachment = $node } }
+    }
+    if ($query -match 'mutation DeleteAttachment') {
+        if (-not $attachments.ContainsKey($variables.id)) { return New-LinearTestResponse -Data @{ attachmentDelete = $null } -Errors @($notFound) }
+        return New-LinearTestResponse -Data @{ attachmentDelete = @{ success = $true; entityId = $variables.id } }
+    }
+    $null
+}

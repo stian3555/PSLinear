@@ -144,6 +144,11 @@ Add-LinearComment ENG-412 'Deployed to staging.'
 Get-LinearComment ENG-412 | Select-Object -Last 1 | Add-LinearComment -Body 'Thanks, fixed.'
 Get-LinearComment ENG-412 | Where-Object { -not $_.IsReply -and -not $_.Resolved } | Set-LinearComment -Resolved $true
 
+# Upload files, link a pull request, and show a screenshot in a comment
+Add-LinearAttachment ENG-412 ./logs/*.log -Comment 'Logs from the failed run.'
+Add-LinearAttachment ENG-412 -Url https://github.com/acme/app/pull/42
+Add-LinearComment ENG-412 'After the fix:' -Attachment ./after.png
+
 # Move issues to the trash (asks per issue unless -Confirm:$false); -Archive archives instead
 Get-LinearIssue -Team ENG -Label Spam -All | Remove-LinearIssue
 
@@ -173,6 +178,10 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { 
 | `Add-LinearComment` | Comment on an issue or project, or reply to a comment. |
 | `Set-LinearComment` | Edit a comment, or resolve or reopen its thread. |
 | `Remove-LinearComment` | Delete comments. |
+| `Get-LinearAttachment` | Attachments of issues: uploaded files, links and integration links. |
+| `Add-LinearAttachment` | Upload files to an issue (private by default) or link a URL to it. |
+| `Set-LinearAttachment` | Change an attachment's title or subtitle. |
+| `Remove-LinearAttachment` | Remove attachments from issues. |
 | `Get-LinearRateLimit` | Rate-limit status from the latest response. |
 | `Invoke-LinearGraphQL` | Run any GraphQL query or mutation. |
 
@@ -240,7 +249,7 @@ publish. A mistake means a new version, not a re-tag.
 
 ## Roadmap
 
-- Issue relations, milestones and attachments
+- Issue relations and milestones
 - `-Cycle`, `-Milestone` and `-Delegate` on `New-LinearIssue` and `Set-LinearIssue`
 - Tab completion for `-State`, `-Label` and `-Assignee`
 - Markdown help with platyPS and an online help URI

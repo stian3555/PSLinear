@@ -11,6 +11,10 @@ function Add-LinearComment {
         PSLinear.Comment objects. Linear threads are one level deep, so a reply to a reply is
         added to the same thread.
 
+        -Attachment uploads files and adds them to the end of the comment: images are shown in
+        the comment, other files as links. Uploads are private (only workspace members can open
+        them) unless -Public, which uploads images to a public URL and warns about it.
+
         With -WhatIf nothing is sent to Linear, not even the project or comment lookups.
 
     .PARAMETER Issue
@@ -27,7 +31,14 @@ function Add-LinearComment {
         The id of the comment to reply to.
 
     .PARAMETER Body
-        The comment text, in Markdown.
+        The comment text, in Markdown. Optional when -Attachment is given.
+
+    .PARAMETER Attachment
+        Files to upload and add to the comment. Wildcards are supported.
+
+    .PARAMETER Public
+        Uploads -Attachment images to a public URL that anyone with the link can open, instead of
+        a private one. Only PNG, JPEG, GIF, WebP, BMP and TIFF images can be public.
 
     .EXAMPLE
         Add-LinearComment ENG-123 'Deployed to staging.'
@@ -38,6 +49,11 @@ function Add-LinearComment {
         Add-LinearComment -Issue ENG-123 -Body (Get-Content ./notes.md -Raw)
 
         Comments with the contents of a Markdown file.
+
+    .EXAMPLE
+        Add-LinearComment ENG-123 'The dialog after the fix:' -Attachment ./before.png, ./after.png
+
+        Comments with two screenshots shown in the comment.
 
     .EXAMPLE
         Get-LinearComment ENG-123 | Select-Object -Last 1 | Add-LinearComment -Body 'Thanks, fixed.'
@@ -62,6 +78,9 @@ function Add-LinearComment {
 
     .LINK
         Set-LinearComment
+
+    .LINK
+        Add-LinearAttachment
     #>
     [CmdletBinding(DefaultParameterSetName = 'Issue', SupportsShouldProcess, ConfirmImpact = 'Low')]
     [OutputType('PSLinear.Comment')]
@@ -81,10 +100,27 @@ function Add-LinearComment {
         [ValidateNotNullOrEmpty()]
         [string] $ReplyTo,
 
-        [Parameter(Mandatory, Position = 1)]
+        [Parameter(Position = 1)]
         [ValidateNotNullOrEmpty()]
-        [string] $Body
+        [string] $Body,
+
+        [SupportsWildcards()]
+        [ValidateNotNullOrEmpty()]
+        [string[]] $Attachment,
+
+        [switch] $Public
     )
+
+    begin {
+        if (-not $Body -and -not $Attachment) {
+            $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message 'Specify -Body, -Attachment or both.' `
+                        -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument))
+        }
+        if ($Public -and -not $Attachment) {
+            $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message '-Public applies to -Attachment files; give -Attachment too.' `
+                        -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument))
+        }
+    }
 
     process {
         $replyToObject = $null
@@ -103,18 +139,32 @@ function Add-LinearComment {
             else {
                 (Get-LinearCommentTarget -Issue $Issue -Project $Project -InputObject $InputObject).Name
             }
+
+            $files = @(if ($Attachment) { Resolve-LinearUploadFile -Path $Attachment })
+            if ($Public) {
+                foreach ($file in $files) {
+                    $contentType = Get-LinearContentType -Path $file.Name
+                    if (-not (Test-LinearPublicImage -ContentType $contentType)) {
+                        throw (New-LinearErrorRecord -Message "'$($file.Name)' is $contentType; only PNG, JPEG, GIF, WebP, BMP and TIFF images can be uploaded to a public URL." `
+                                -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument -TargetObject $file.FullName)
+                    }
+                }
+            }
         }
         catch {
             $PSCmdlet.ThrowTerminatingError($_)
         }
 
         $action = if ($isReply) { 'Reply' } else { 'Add comment' }
-        $changes = Format-LinearChangeList -BoundParameters @{ Body = $Body } -Name 'Body'
+        $summary = @{}
+        if ($Body) { $summary['Body'] = $Body }
+        if ($files.Count -gt 0) { $summary['Attachment'] = @($files.Name) }
+        $changes = Format-LinearChangeList -BoundParameters $summary -Name 'Body', 'Attachment'
         if (-not $PSCmdlet.ShouldProcess($targetName, "$action ($changes)")) {
             return
         }
 
-        $commentInput = @{ body = $Body }
+        $commentInput = @{}
         if ($isReply) {
             $parent = $replyToObject
             if ($null -eq $parent) {
@@ -144,6 +194,23 @@ function Add-LinearComment {
             }
             $commentInput[$(if ($target.Kind -eq 'Issue') { 'issueId' } else { 'projectId' })] = $target.Id
         }
+
+        # Uploaded files go at the end of the comment, one per line.
+        $parts = [System.Collections.Generic.List[string]]::new()
+        if ($Body) { $parts.Add($Body) }
+        foreach ($file in $files) {
+            if ($Public) {
+                Write-Warning "'$($file.Name)' is uploaded to a public URL that anyone with the link can open without signing in."
+            }
+            try {
+                $upload = Invoke-LinearFileUpload -File $file -Public:$Public
+            }
+            catch {
+                $PSCmdlet.ThrowTerminatingError($_)
+            }
+            $parts.Add($upload.Markdown)
+        }
+        $commentInput['body'] = $parts -join "`n`n"
 
         $result = Invoke-LinearRequest -Query (Get-LinearGraphQLDocument -Name 'CreateComment') -Variables @{ input = $commentInput } -IncludeErrors
         $comment = Get-LinearNestedValue -InputObject $result.Data -Name 'commentCreate.comment'

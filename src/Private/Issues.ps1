@@ -71,6 +71,26 @@ function Get-LinearIssueTarget {
     }
 }
 
+function Get-LinearIssueReference {
+    <#
+    .SYNOPSIS
+        Looks up an issue's id, identifier and team. Returns [pscustomobject]@{ Issue; Errors },
+        so a missing issue can be written as one non-terminating error.
+    #>
+    [CmdletBinding()]
+    [OutputType([pscustomobject])]
+    param(
+        [Parameter(Mandatory)]
+        [string] $Id
+    )
+
+    $result = Invoke-LinearRequest -Query (Get-LinearGraphQLDocument -Name 'GetIssueTeam') -Variables @{ id = $Id } -IncludeErrors
+    [pscustomobject]@{
+        Issue  = Get-LinearNestedValue -InputObject $result.Data -Name 'issue'
+        Errors = $result.Errors
+    }
+}
+
 function ConvertTo-LinearIssueIdentifier {
     <#
     .SYNOPSIS

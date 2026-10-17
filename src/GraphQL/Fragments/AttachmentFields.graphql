@@ -1,0 +1,17 @@
+fragment AttachmentFields on Attachment {
+  id
+  title
+  subtitle
+  url
+  sourceType
+  createdAt
+  updatedAt
+  creator {
+    id
+    name
+  }
+  issue {
+    id
+    identifier
+  }
+}

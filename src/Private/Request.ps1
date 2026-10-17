@@ -46,6 +46,45 @@ function Send-LinearHttpRequest {
     }
 }
 
+function Send-LinearFileUpload {
+    <#
+    .SYNOPSIS
+        PUTs a file to a pre-signed upload URL from Linear's fileUpload mutation. Returns the HTTP status code.
+    .DESCRIPTION
+        The only request that does not go to the GraphQL endpoint: the URL points at Linear's
+        cloud storage and carries its own signature, so no Authorization header is sent. Kept
+        tiny on purpose so tests can mock the network boundary.
+    #>
+    [CmdletBinding()]
+    [OutputType([int])]
+    param(
+        [Parameter(Mandatory)]
+        [uri] $Uri,
+
+        [Parameter(Mandatory)]
+        [string] $Path,
+
+        [Parameter(Mandatory)]
+        [string] $ContentType,
+
+        [hashtable] $Headers = @{}
+    )
+
+    $requestParameters = @{
+        Uri                  = $Uri
+        Method               = 'Put'
+        # -InFile expands wildcards, so escape names like 'shot [1].png'.
+        InFile               = [WildcardPattern]::Escape($Path)
+        ContentType          = $ContentType
+        Headers              = $Headers
+        SkipHeaderValidation = $true
+        SkipHttpErrorCheck   = $true
+        ErrorAction          = 'Stop'
+    }
+    $response = Invoke-WebRequest @requestParameters
+    [int]$response.StatusCode
+}
+
 function Invoke-LinearRequest {
     <#
     .SYNOPSIS

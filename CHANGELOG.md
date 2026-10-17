@@ -12,6 +12,13 @@ and this project follows [Semantic Versioning](https://semver.org/).
   list the comments on issues and projects thread by thread, comment and reply (a reply to a
   reply joins the same thread), edit comments, resolve or reopen threads (resolving through a
   reply records it as the resolution) and delete comments.
+- `Get-LinearAttachment`, `Add-LinearAttachment`, `Set-LinearAttachment` and
+  `Remove-LinearAttachment`: list an issue's attachments, upload files (wildcards allowed,
+  private by default, `-Public` for images with a warning) or link URLs (with rich links for
+  integrations such as GitHub), rename them and remove them. The issue is checked before
+  anything is uploaded.
+- `Add-LinearComment -Attachment` uploads files and adds them to the comment: images are shown
+  in the comment, other files linked. `-Body` is optional when files are attached.
 - `-Project` parameters also accept a project's slug id and URL.
 
 ## [0.1.0] - 2026-10-17
