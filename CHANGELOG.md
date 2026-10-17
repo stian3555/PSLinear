@@ -50,6 +50,15 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - `Get-LinearProject` filters by `-Team` and `-Status`, and `-Id` (or piped projects) returns the
   full project with its content, members and initiatives. Projects include their health,
   priority, teams and labels.
+- `Get-LinearInitiative`, `New-LinearInitiative`, `Set-LinearInitiative` and
+  `Remove-LinearInitiative`: list initiatives (filter by status, or get one in full with its
+  content and sub-initiatives), create and change them with the owner, lead team and labels
+  given by name, add projects to them or take projects out, and move them to the trash or
+  archive them.
+- `Get-LinearInitiativeUpdate`, `New-LinearInitiativeUpdate`, `Set-LinearInitiativeUpdate` and
+  `Remove-LinearInitiativeUpdate`: list, post, edit and remove initiative status updates.
+- `Get-LinearComment -Initiative` and `Add-LinearComment -Initiative` list and add comments on
+  initiatives, and piped initiatives work too. Comments include their `InitiativeId`.
 - `Get-LinearProjectUpdate`, `New-LinearProjectUpdate`, `Set-LinearProjectUpdate` and
   `Remove-LinearProjectUpdate`: list a project's status updates newest first, post updates with
   a health, edit them and remove them.
