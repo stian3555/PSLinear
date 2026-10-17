@@ -1,0 +1,8 @@
+mutation CreateInitiative($input: InitiativeCreateInput!) {
+  initiativeCreate(input: $input) {
+    success
+    initiative {
+      ...InitiativeFields
+    }
+  }
+}

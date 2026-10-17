@@ -31,4 +31,8 @@ fragment CommentFields on Comment {
     id
     name
   }
+  initiative {
+    id
+    name
+  }
 }

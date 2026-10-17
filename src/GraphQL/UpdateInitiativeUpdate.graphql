@@ -1,0 +1,8 @@
+mutation UpdateInitiativeUpdate($id: String!, $input: InitiativeUpdateUpdateInput!) {
+  initiativeUpdateUpdate(id: $id, input: $input) {
+    success
+    initiativeUpdate {
+      ...InitiativeUpdateFields
+    }
+  }
+}

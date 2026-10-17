@@ -1,0 +1,16 @@
+fragment InitiativeUpdateFields on InitiativeUpdate {
+  id
+  body
+  health
+  url
+  createdAt
+  editedAt
+  user {
+    id
+    name
+  }
+  initiative {
+    id
+    name
+  }
+}

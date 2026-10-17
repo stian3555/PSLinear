@@ -1,0 +1,24 @@
+query GetInitiative($id: String!) {
+  initiative(id: $id) {
+    ...InitiativeFields
+    content
+    allLabels: labels(first: 100) {
+      nodes {
+        id
+        name
+      }
+    }
+    allProjects: projects(first: 100) {
+      nodes {
+        id
+        name
+      }
+    }
+    subInitiatives(first: 50) {
+      nodes {
+        id
+        name
+      }
+    }
+  }
+}

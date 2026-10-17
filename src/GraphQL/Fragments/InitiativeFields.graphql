@@ -1,0 +1,39 @@
+fragment InitiativeFields on Initiative {
+  id
+  name
+  slugId
+  url
+  description
+  status
+  health
+  healthUpdatedAt
+  priority
+  targetDate
+  startedAt
+  completedAt
+  archivedAt
+  owner {
+    id
+    name
+  }
+  leadTeam {
+    id
+    key
+  }
+  parentInitiative {
+    id
+    name
+  }
+  labels(first: 20) {
+    nodes {
+      id
+      name
+    }
+  }
+  projects(first: 20) {
+    nodes {
+      id
+      name
+    }
+  }
+}

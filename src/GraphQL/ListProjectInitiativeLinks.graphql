@@ -1,0 +1,12 @@
+query ListProjectInitiativeLinks($id: String!) {
+  project(id: $id) {
+    initiativeToProjects(first: 100) {
+      nodes {
+        id
+        initiative {
+          id
+        }
+      }
+    }
+  }
+}

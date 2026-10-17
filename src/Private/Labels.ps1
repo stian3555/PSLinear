@@ -109,3 +109,58 @@ function Resolve-LinearLabelId {
                 -ErrorId 'PSLinear.LabelNotFound' -Category ObjectNotFound -TargetObject $name)
     }
 }
+
+function Resolve-LinearListedLabelId {
+    <#
+    .SYNOPSIS
+        Resolves label names or ids against a cached list of workspace labels, such as project or
+        initiative labels.
+    .PARAMETER CacheCommand
+        The private command that returns the cached labels and takes -Refresh, for example
+        Get-LinearProjectLabelCache.
+    .PARAMETER Noun
+        What the labels are called in messages, for example 'Project label'.
+    .NOTES
+        Throws an ErrorRecord (PSLinear.LabelNotFound or PSLinear.AmbiguousLabel) that callers
+        rethrow with $PSCmdlet.ThrowTerminatingError.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)]
+        [string[]] $Label,
+
+        [Parameter(Mandatory)]
+        [string] $CacheCommand,
+
+        [Parameter(Mandatory)]
+        [string] $Noun
+    )
+
+    foreach ($name in $Label) {
+        if (Test-LinearGuid -Value $name) {
+            $name
+            continue
+        }
+        $match = @()
+        foreach ($refresh in $false, $true) {
+            $match = @(& $CacheCommand -Refresh:$refresh | Where-Object { $null -ne $_ -and $_.Name -eq $name })
+            if ($match.Count -gt 0) { break }
+        }
+        if ($match.Count -eq 1) {
+            $match[0].Id
+            continue
+        }
+        if ($match.Count -gt 1) {
+            $matchList = ($match | ForEach-Object {
+                    $scope = if ($_.Team) { "team $($_.Team)" } else { 'workspace' }
+                    "$(if ($_.Group) { "$($_.Group)/" })$($_.Name) ($scope, id $($_.Id))"
+                }) -join '; '
+            throw (New-LinearErrorRecord -Message "$Noun '$name' is ambiguous. Use the label id instead. Matches: $matchList." `
+                    -ErrorId 'PSLinear.AmbiguousLabel' -Category InvalidArgument -TargetObject $name)
+        }
+        $available = Format-LinearValueList -Value (& $CacheCommand | Where-Object { $null -ne $_ } | ForEach-Object Name | Select-Object -Unique)
+        throw (New-LinearErrorRecord -Message "$Noun '$name' was not found. Valid $($Noun.ToLowerInvariant())s: $available." `
+                -ErrorId 'PSLinear.LabelNotFound' -Category ObjectNotFound -TargetObject $name)
+    }
+}

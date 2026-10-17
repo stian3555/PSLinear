@@ -51,6 +51,33 @@ Describe 'Add-LinearComment' {
             }
         }
 
+        It 'comments on an initiative given by name or piped in' {
+            (Add-LinearComment -Initiative 'Q1 growth' -Body 'Kickoff notes').Target | Should -Be 'Q1 growth'
+            $initiative = [pscustomobject]@{ PSTypeName = 'PSLinear.Initiative'; Id = 'initiative-reliability'; Name = 'Platform reliability' }
+            $initiative | Add-LinearComment -Body 'Scope agreed' | Out-Null
+            foreach ($initiativeId in 'initiative-growth', 'initiative-reliability') {
+                Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                    $commentInput = Get-RequestVariable $Body 'input'
+                    $null -ne $commentInput -and $commentInput['initiativeId'] -eq $initiativeId -and
+                    -not $commentInput.ContainsKey('projectId') -and -not $commentInput.ContainsKey('issueId')
+                }
+            }
+        }
+
+        It 'replies on the initiative of the comment replied to' {
+            $comment = [pscustomobject]@{ PSTypeName = 'PSLinear.Comment'; Id = 'comment-i1'; Target = 'Q1 growth'; ParentId = $null; IssueId = $null; ProjectId = $null; InitiativeId = 'initiative-growth' }
+            $comment | Add-LinearComment -Body 'Agreed' | Out-Null
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                $commentInput = Get-RequestVariable $Body 'input'
+                $null -ne $commentInput -and $commentInput['parentId'] -eq 'comment-i1' -and $commentInput['initiativeId'] -eq 'initiative-growth'
+            }
+        }
+
+        It 'sends nothing for an initiative with -WhatIf' {
+            Add-LinearComment -Initiative 'Q1 growth' -Body 'x' -WhatIf
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
+        }
+
         It 'comments on every issue piped in' {
             $issues = @(
                 [pscustomobject]@{ PSTypeName = 'PSLinear.Issue'; Id = 'issue-ENG-1'; Identifier = 'ENG-1' }
