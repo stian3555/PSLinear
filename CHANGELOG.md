@@ -24,6 +24,9 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - The write commands accept names for teams, workflow states, labels, projects and users
   (`me`, email, name or display name). Lookups are cached, and an unknown name fails with a
   list of the valid values. `-WhatIf` sends no requests at all.
+- `-State` also accepts a state type (`started`, `completed`, ...), which picks the team's
+  first state of that type. Issue commands accept issue URLs as well as identifiers, and
+  `-Priority` accepts the numbers 0 to 4 as well as names.
 - `Get-LinearTeam` with wildcard filtering, and tab completion for `-Team`.
 - `Get-LinearViewer` and `Get-LinearRateLimit`.
 - `Invoke-LinearGraphQL` for any query or mutation; mutations support `-WhatIf` and `-Confirm`.

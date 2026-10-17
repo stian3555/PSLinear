@@ -93,6 +93,27 @@ Describe 'New-LinearIssue' {
             }
         }
 
+        It 'accepts priority numbers and a parent issue URL' {
+            New-LinearIssue -Team ENG -Title 'x' -Priority 3 -Parent 'https://linear.app/acme/issue/ENG-42/fix-login' | Out-Null
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
+                $issueInput = (Get-RequestBody $Body).variables.input
+                $null -ne $issueInput -and $issueInput.priority -eq 3 -and $issueInput.parentId -eq 'ENG-42'
+            }
+        }
+
+        It 'rejects an unknown priority before sending anything' {
+            { New-LinearIssue -Team ENG -Title 'x' -Priority 7 } | Should -Throw -ExpectedMessage "*'7' is not a priority*"
+            { New-LinearIssue -Team ENG -Title 'x' -Priority 'Highest' } | Should -Throw -ExpectedMessage "*'Highest' is not a priority*"
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
+        }
+
+        It 'resolves a state type in the issue''s team' {
+            New-LinearIssue -Team ENG -Title 'x' -State Started | Out-Null
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
+                (Get-RequestBody $Body).variables.input.stateId -eq 'state-eng-progress'
+            }
+        }
+
         It 'resolves -Assignee me to the connected user' {
             New-LinearIssue -Team ENG -Title 'x' -Assignee me | Out-Null
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
@@ -155,7 +176,7 @@ Describe 'New-LinearIssue' {
     Context 'Errors' {
         It 'stops on an unknown state, lists the valid states and creates nothing' {
             { New-LinearIssue -Team ENG -Title 'x' -State 'Doen' } |
-                Should -Throw -ErrorId 'PSLinear.StateNotFound*' -ExpectedMessage '*Valid states: Backlog, Todo, In Progress, Done, Canceled, Duplicate.'
+                Should -Throw -ErrorId 'PSLinear.StateNotFound*' -ExpectedMessage '*Valid states: Backlog, Todo, In Progress, In Review, Done, Canceled, Duplicate; state types: *'
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly -ParameterFilter {
                 (Get-RequestOperation $Body) -eq 'CreateIssue'
             }

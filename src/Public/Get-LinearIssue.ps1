@@ -4,7 +4,7 @@ function Get-LinearIssue {
         Gets Linear issues by identifier, or lists issues that match a filter.
 
     .DESCRIPTION
-        With -Id, returns specific issues by their identifier (ENG-123) or UUID.
+        With -Id, returns specific issues by their identifier (ENG-123), UUID or URL.
 
         Without -Id, lists issues that match the filter parameters. Parameters are combined
         with AND; values within one parameter (for example several states) are combined
@@ -16,7 +16,7 @@ function Get-LinearIssue {
         -All to return every match.
 
     .PARAMETER Id
-        One or more issue identifiers (ENG-123) or UUIDs.
+        One or more issue identifiers (ENG-123), UUIDs or issue URLs.
 
     .PARAMETER InputObject
         PSLinear.Issue objects to refresh, typically from the pipeline.
@@ -44,7 +44,7 @@ function Get-LinearIssue {
         Project name or id.
 
     .PARAMETER Priority
-        Priority levels: None, Urgent, High, Medium or Low.
+        Priority levels: None, Urgent, High, Medium or Low, or the numbers 0 to 4.
 
     .PARAMETER Search
         Text to search for in the title, description and comments.
@@ -153,7 +153,8 @@ function Get-LinearIssue {
         [string] $Project,
 
         [Parameter(ParameterSetName = 'List')]
-        [ValidateSet('None', 'Urgent', 'High', 'Medium', 'Low')]
+        [ArgumentCompletions('None', 'Urgent', 'High', 'Medium', 'Low')]
+        [ValidatePattern('^(?:None|Urgent|High|Medium|Low|[0-4])$', ErrorMessage = "'{0}' is not a priority. Use None, Urgent, High, Medium, Low, or 0 to 4.")]
         [string[]] $Priority,
 
         [Parameter(ParameterSetName = 'List')]
@@ -184,7 +185,12 @@ function Get-LinearIssue {
 
     process {
         if ($PSCmdlet.ParameterSetName -in 'ById', 'ByObject') {
-            $identifiers = if ($PSCmdlet.ParameterSetName -eq 'ById') { $Id } else { $InputObject | ForEach-Object Id }
+            $identifiers = if ($PSCmdlet.ParameterSetName -eq 'ById') {
+                foreach ($value in $Id) { ConvertTo-LinearIssueIdentifier -Value $value }
+            }
+            else {
+                $InputObject | ForEach-Object Id
+            }
             $query = Get-LinearGraphQLDocument -Name 'GetIssue'
 
             foreach ($identifier in $identifiers) {
@@ -265,7 +271,7 @@ function Get-LinearIssue {
             }
 
             if ($Priority) {
-                $issueFilter['priority'] = @{ in = @(foreach ($level in $Priority) { $script:PriorityMap[$level] }) }
+                $issueFilter['priority'] = @{ in = @(foreach ($level in $Priority) { ConvertTo-LinearPriority -Priority $level }) }
             }
 
             if ($Search) {

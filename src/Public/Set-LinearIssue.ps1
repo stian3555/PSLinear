@@ -4,7 +4,7 @@ function Set-LinearIssue {
         Changes properties of Linear issues.
 
     .DESCRIPTION
-        Updates one or more issues, given by identifier (ENG-123) or piped in from
+        Updates one or more issues, given by identifier (ENG-123), URL, or piped in from
         Get-LinearIssue. Only the properties you specify are changed. Nothing is returned
         unless you use -PassThru.
 
@@ -19,7 +19,7 @@ function Set-LinearIssue {
         the name lookups, so names are not checked.
 
     .PARAMETER Id
-        One or more issue identifiers (ENG-123) or UUIDs.
+        One or more issue identifiers (ENG-123), UUIDs or issue URLs.
 
     .PARAMETER InputObject
         PSLinear.Issue objects to update, typically from Get-LinearIssue.
@@ -35,7 +35,9 @@ function Set-LinearIssue {
         The new description, in Markdown. An empty string clears it.
 
     .PARAMETER State
-        The workflow state name, such as 'Done' or 'In Progress', or its id.
+        The workflow state name, such as 'Done' or 'In Progress', or its id. A state type
+        (Backlog, Unstarted, Started, Completed, Canceled) picks the team's first state of
+        that type, so one command works across teams whose states are named differently.
 
     .PARAMETER Assignee
         'me', an email address, a user id, or the user's full name or display name.
@@ -44,7 +46,7 @@ function Set-LinearIssue {
         Removes the assignee.
 
     .PARAMETER Priority
-        None, Urgent, High, Medium or Low.
+        None, Urgent, High, Medium or Low, or the number 0 to 4 (0 None, 1 Urgent, 4 Low).
 
     .PARAMETER Label
         Replaces all labels on the issue with these label names or ids.
@@ -65,7 +67,7 @@ function Set-LinearIssue {
         The due date. Only the date part is used.
 
     .PARAMETER Parent
-        The parent issue's identifier (ENG-123) or id, which makes this a sub-issue.
+        The parent issue's identifier (ENG-123), id or URL, which makes this a sub-issue.
 
     .PARAMETER PassThru
         Returns the updated issues.
@@ -134,7 +136,8 @@ function Set-LinearIssue {
 
         [switch] $Unassign,
 
-        [ValidateSet('None', 'Urgent', 'High', 'Medium', 'Low')]
+        [ArgumentCompletions('None', 'Urgent', 'High', 'Medium', 'Low')]
+        [ValidatePattern('^(?:None|Urgent|High|Medium|Low|[0-4])$', ErrorMessage = "'{0}' is not a priority. Use None, Urgent, High, Medium, Low, or 0 to 4.")]
         [string] $Priority,
 
         [ValidateNotNullOrEmpty()]
@@ -221,14 +224,14 @@ function Set-LinearIssue {
                 if ($State) { $issueInput['stateId'] = Resolve-LinearWorkflowStateId -TeamId $teamId -State $State }
                 if ($Unassign) { $issueInput['assigneeId'] = $null }
                 elseif ($Assignee) { $issueInput['assigneeId'] = Resolve-LinearUserId -User $Assignee }
-                if ($Priority) { $issueInput['priority'] = $script:PriorityMap[$Priority] }
+                if ($Priority) { $issueInput['priority'] = ConvertTo-LinearPriority -Priority $Priority }
                 if ($Label) { $issueInput['labelIds'] = @(Resolve-LinearLabelId -TeamId $teamId -Label $Label) }
                 if ($AddLabel) { $issueInput['addedLabelIds'] = @(Resolve-LinearLabelId -TeamId $teamId -Label $AddLabel) }
                 if ($RemoveLabel) { $issueInput['removedLabelIds'] = @(Resolve-LinearLabelId -TeamId $teamId -Label $RemoveLabel) }
                 if ($Project) { $issueInput['projectId'] = Resolve-LinearProjectId -Project $Project }
                 if ($PSBoundParameters.ContainsKey('Estimate')) { $issueInput['estimate'] = $Estimate }
                 if ($PSBoundParameters.ContainsKey('DueDate')) { $issueInput['dueDate'] = ConvertTo-LinearTimelessDate -Date $DueDate }
-                if ($Parent) { $issueInput['parentId'] = $Parent }
+                if ($Parent) { $issueInput['parentId'] = ConvertTo-LinearIssueIdentifier -Value $Parent }
             }
             catch {
                 $PSCmdlet.ThrowTerminatingError($_)

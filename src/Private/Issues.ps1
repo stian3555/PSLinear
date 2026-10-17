@@ -52,8 +52,9 @@ function Get-LinearIssueTarget {
         [object[]] $InputObject
     )
 
-    foreach ($identifier in @($Id)) {
-        if ([string]::IsNullOrEmpty($identifier)) { continue }
+    foreach ($value in @($Id)) {
+        if ([string]::IsNullOrEmpty($value)) { continue }
+        $identifier = ConvertTo-LinearIssueIdentifier -Value $value
         [pscustomobject]@{ Id = $identifier; Name = $identifier; TeamId = $null }
     }
 
@@ -67,6 +68,42 @@ function Get-LinearIssueTarget {
             TeamId = Get-LinearNestedValue -InputObject $issue -Name 'TeamId'
         }
     }
+}
+
+function ConvertTo-LinearIssueIdentifier {
+    <#
+    .SYNOPSIS
+        Turns an issue URL (https://linear.app/acme/issue/ENG-123/title) into its identifier (ENG-123).
+        Any other value is returned unchanged.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)]
+        [string] $Value
+    )
+
+    if ($Value -match '^https?://linear\.app/[^/]+/issue/([A-Za-z0-9_]+-\d+)(?:[/?#]|$)') {
+        return $Matches[1].ToUpperInvariant()
+    }
+    $Value
+}
+
+function ConvertTo-LinearPriority {
+    <#
+    .SYNOPSIS
+        Converts a priority name (High) or number (0-4) to Linear's priority number.
+    #>
+    [CmdletBinding()]
+    [OutputType([int])]
+    param(
+        [Parameter(Mandatory)]
+        [string] $Priority
+    )
+
+    $number = 0
+    if ([int]::TryParse($Priority, [ref]$number)) { return $number }
+    $script:PriorityMap[$Priority]
 }
 
 function ConvertTo-LinearTimelessDate {

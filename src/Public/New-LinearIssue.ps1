@@ -25,14 +25,15 @@ function New-LinearIssue {
         The issue description, in Markdown.
 
     .PARAMETER State
-        The workflow state name, such as 'Todo' or 'In Progress', or its id. Defaults to the
-        team's default state.
+        The workflow state name, such as 'Todo' or 'In Progress', or its id. A state type
+        (Backlog, Unstarted, Started, Completed, Canceled) picks the team's first state of
+        that type. Defaults to the team's default state.
 
     .PARAMETER Assignee
         'me', an email address, a user id, or the user's full name or display name.
 
     .PARAMETER Priority
-        None, Urgent, High, Medium or Low.
+        None, Urgent, High, Medium or Low, or the number 0 to 4 (0 None, 1 Urgent, 4 Low).
 
     .PARAMETER Label
         Label names or ids. Workspace labels and the team's own labels can be used.
@@ -47,7 +48,7 @@ function New-LinearIssue {
         The due date. Only the date part is used.
 
     .PARAMETER Parent
-        The parent issue's identifier (ENG-123) or id, to create a sub-issue.
+        The parent issue's identifier (ENG-123), id or URL, to create a sub-issue.
 
     .EXAMPLE
         New-LinearIssue -Team ENG -Title 'Retry webhook deliveries on 5xx'
@@ -102,7 +103,8 @@ function New-LinearIssue {
         [ValidateNotNullOrEmpty()]
         [string] $Assignee,
 
-        [ValidateSet('None', 'Urgent', 'High', 'Medium', 'Low')]
+        [ArgumentCompletions('None', 'Urgent', 'High', 'Medium', 'Low')]
+        [ValidatePattern('^(?:None|Urgent|High|Medium|Low|[0-4])$', ErrorMessage = "'{0}' is not a priority. Use None, Urgent, High, Medium, Low, or 0 to 4.")]
         [string] $Priority,
 
         [ValidateNotNullOrEmpty()]
@@ -137,12 +139,12 @@ function New-LinearIssue {
             if ($PSBoundParameters.ContainsKey('Description')) { $issueInput['description'] = $Description }
             if ($State) { $issueInput['stateId'] = Resolve-LinearWorkflowStateId -TeamId $teamId -State $State }
             if ($Assignee) { $issueInput['assigneeId'] = Resolve-LinearUserId -User $Assignee }
-            if ($Priority) { $issueInput['priority'] = $script:PriorityMap[$Priority] }
+            if ($Priority) { $issueInput['priority'] = ConvertTo-LinearPriority -Priority $Priority }
             if ($Label) { $issueInput['labelIds'] = @(Resolve-LinearLabelId -TeamId $teamId -Label $Label) }
             if ($Project) { $issueInput['projectId'] = Resolve-LinearProjectId -Project $Project }
             if ($PSBoundParameters.ContainsKey('Estimate')) { $issueInput['estimate'] = $Estimate }
             if ($PSBoundParameters.ContainsKey('DueDate')) { $issueInput['dueDate'] = ConvertTo-LinearTimelessDate -Date $DueDate }
-            if ($Parent) { $issueInput['parentId'] = $Parent }
+            if ($Parent) { $issueInput['parentId'] = ConvertTo-LinearIssueIdentifier -Value $Parent }
         }
         catch {
             $PSCmdlet.ThrowTerminatingError($_)

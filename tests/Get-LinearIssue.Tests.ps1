@@ -41,6 +41,10 @@ Describe 'Get-LinearIssue' {
             }
         }
 
+        It 'accepts an issue URL' {
+            (Get-LinearIssue 'https://linear.app/acme/issue/ENG-8/some-title').Identifier | Should -Be 'ENG-8'
+        }
+
         It 'accepts identifiers positionally and from the pipeline' {
             (Get-LinearIssue 'ENG-3').Identifier | Should -Be 'ENG-3'
             ('ENG-4', 'ENG-5' | Get-LinearIssue).Identifier | Should -Be @('ENG-4', 'ENG-5')
@@ -183,6 +187,13 @@ Describe 'Get-LinearIssue' {
             Get-LinearIssue -Priority Urgent, Low | Out-Null
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
                 ((Get-RequestBody $Body).variables.filter.priority.in -join ',') -eq '1,4'
+            }
+        }
+
+        It 'accepts priority numbers alongside names' {
+            Get-LinearIssue -Priority 0, High | Out-Null
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
+                ((Get-RequestBody $Body).variables.filter.priority.in -join ',') -eq '0,2'
             }
         }
 

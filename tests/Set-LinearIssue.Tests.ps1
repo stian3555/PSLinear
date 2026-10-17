@@ -140,6 +140,26 @@ Describe 'Set-LinearIssue' {
             }
         }
 
+        It 'accepts issue URLs and priority numbers' {
+            Set-LinearIssue 'https://linear.app/acme/issue/eng-7/some-title?foo=bar' -Priority 0
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                $request = Get-RequestBody $Body
+                $request.variables.id -eq 'ENG-7' -and $request.variables.input.ContainsKey('priority') -and $request.variables.input.priority -eq 0
+            }
+        }
+
+        It 'moves issues from several teams to the first completed state of each team' {
+            'ENG-1', 'OPS-2' | Set-LinearIssue -State completed
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                $request = Get-RequestBody $Body
+                $request.variables.id -eq 'ENG-1' -and $request.variables.input.stateId -eq 'state-eng-done'
+            }
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                $request = Get-RequestBody $Body
+                $request.variables.id -eq 'OPS-2' -and $request.variables.input.stateId -eq 'state-ops-done'
+            }
+        }
+
         It 'returns the updated issue with -PassThru' {
             $issue = Set-LinearIssue ENG-3 -Priority Low -PassThru
             $issue.Identifier | Should -Be 'ENG-3'
@@ -216,7 +236,7 @@ Describe 'Set-LinearIssue' {
 
         It 'stops on a state that does not exist in the issue''s team, listing that team''s states' {
             { Set-LinearIssue OPS-1 -State 'In Progress' } |
-                Should -Throw -ErrorId 'PSLinear.StateNotFound*' -ExpectedMessage "State 'In Progress' was not found in team OPS. Valid states: Todo, Doing, Done."
+                Should -Throw -ErrorId 'PSLinear.StateNotFound*' -ExpectedMessage "State 'In Progress' was not found in team OPS. Valid states: Todo, Doing, Done; state types: unstarted, started, completed."
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly -ParameterFilter {
                 (Get-RequestOperation $Body) -eq 'UpdateIssue'
             }

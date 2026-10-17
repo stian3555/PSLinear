@@ -26,8 +26,9 @@ ENG-398      Todo             Medium      Ada Lovelace         Document the depl
 - **Readable filters.** `-Team ENG -State 'In Progress' -Assignee me -Label Bug` instead of
   hand-written GraphQL filters, with a raw `-Filter` for everything else.
 - **Names instead of ids.** Create and update issues with team keys, state, label, project
-  and user names, or `me`. Lookups are cached, and an unknown name fails with a list of the
-  valid values.
+  and user names, or `me`. A state type such as `started` or `completed` picks the right state
+  in every team, and issue URLs work wherever an identifier does. Lookups are cached, and an
+  unknown name fails with a list of the valid values.
 - **Safe changes.** `New-`, `Set-` and `Remove-LinearIssue` support `-WhatIf` (which sends
   nothing at all) and `-Confirm`. `Remove-LinearIssue` asks first and moves issues to the
   trash, where they can be restored for 30 days.
@@ -121,6 +122,9 @@ Get-LinearIssue -Team ENG -Label Bug -Unassigned | Set-LinearIssue -Assignee 'gr
 
 # Preview a bulk change without sending anything
 Get-LinearIssue -Assignee me -State 'In Review' | Set-LinearIssue -State Done -WhatIf
+
+# Close issues across teams whose done states have different names
+Get-LinearIssue -Label Duplicate -StateType Unstarted -All | Set-LinearIssue -State completed
 
 # Move issues to the trash (asks per issue unless -Confirm:$false); -Archive archives instead
 Get-LinearIssue -Team ENG -Label Spam -All | Remove-LinearIssue

@@ -28,7 +28,11 @@ function Get-LinearWorkflowStateCache {
 function Resolve-LinearWorkflowStateId {
     <#
     .SYNOPSIS
-        Resolves a workflow state name (In Progress) or id to the state's id within one team.
+        Resolves a workflow state name (In Progress), state type (started) or id to a state id within one team.
+    .DESCRIPTION
+        A name match wins. Otherwise a state type (triage, backlog, unstarted, started, completed,
+        canceled, duplicate) resolves to the team's first state of that type, which lets one
+        command work across teams whose states have different names.
     .NOTES
         Throws an ErrorRecord (PSLinear.StateNotFound) that callers rethrow with $PSCmdlet.ThrowTerminatingError.
     #>
@@ -44,12 +48,21 @@ function Resolve-LinearWorkflowStateId {
 
     if (Test-LinearGuid -Value $State) { return $State }
 
+    $isStateType = $script:WorkflowStateTypeOrder.ContainsKey($State)
     foreach ($refresh in $false, $true) {
-        $match = @(Get-LinearWorkflowStateCache -TeamId $TeamId -Refresh:$refresh | Where-Object { $null -ne $_ -and $_.Name -eq $State })
+        $states = @(Get-LinearWorkflowStateCache -TeamId $TeamId -Refresh:$refresh | Where-Object { $null -ne $_ })
+        $match = @($states | Where-Object { $_.Name -eq $State })
         if ($match.Count -gt 0) { return $match[0].Id }
+        if ($isStateType) {
+            # The cache is in workflow order, so the first state of the type has the lowest position.
+            $match = @($states | Where-Object { $_.Type -eq $State })
+            if ($match.Count -gt 0) { return $match[0].Id }
+        }
     }
 
-    $available = Format-LinearValueList -Value (Get-LinearWorkflowStateCache -TeamId $TeamId | Where-Object { $null -ne $_ } | ForEach-Object Name)
-    throw (New-LinearErrorRecord -Message "State '$State' was not found in team $(Get-LinearTeamKey -TeamId $TeamId). Valid states: $available." `
+    $states = @(Get-LinearWorkflowStateCache -TeamId $TeamId | Where-Object { $null -ne $_ })
+    $available = Format-LinearValueList -Value ($states | ForEach-Object Name)
+    $types = ($states | ForEach-Object Type | Select-Object -Unique) -join ', '
+    throw (New-LinearErrorRecord -Message "State '$State' was not found in team $(Get-LinearTeamKey -TeamId $TeamId). Valid states: $available; state types: $types." `
             -ErrorId 'PSLinear.StateNotFound' -Category ObjectNotFound -TargetObject $State)
 }

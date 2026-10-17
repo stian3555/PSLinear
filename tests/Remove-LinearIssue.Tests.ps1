@@ -71,6 +71,13 @@ Describe 'Remove-LinearIssue' {
             }
         }
 
+        It 'accepts issue URLs' {
+            Remove-LinearIssue 'https://linear.app/acme/issue/ENG-12/old-idea' -Confirm:$false
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                (Get-RequestBody $Body).variables.id -eq 'ENG-12'
+            }
+        }
+
         It 'uses the Id of piped issue objects' {
             $issueId = [guid]::NewGuid().Guid
             [pscustomobject]@{ PSTypeName = 'PSLinear.Issue'; Id = $issueId; Identifier = 'ENG-9' } | Remove-LinearIssue -Confirm:$false

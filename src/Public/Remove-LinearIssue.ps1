@@ -15,7 +15,7 @@ function Remove-LinearIssue {
         Set-LinearIssue -State, or trashing it, unless you need it out of the way without
         either.
 
-        Issues are given by identifier (ENG-123) or piped in from Get-LinearIssue.
+        Issues are given by identifier (ENG-123), URL, or piped in from Get-LinearIssue.
         The command asks for confirmation for each issue; use -Confirm:$false to skip that,
         or -WhatIf to see what would happen without sending anything.
 
@@ -26,7 +26,7 @@ function Remove-LinearIssue {
         Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { success } }' -Variables @{ id = 'ENG-123' }
 
     .PARAMETER Id
-        One or more issue identifiers (ENG-123) or UUIDs.
+        One or more issue identifiers (ENG-123), UUIDs or issue URLs.
 
     .PARAMETER InputObject
         PSLinear.Issue objects to remove, typically from Get-LinearIssue.

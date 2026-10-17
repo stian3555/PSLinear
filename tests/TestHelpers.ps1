@@ -123,7 +123,7 @@ function Get-LinearTestLookupResponse {
     #   $lookup = Get-LinearTestLookupResponse -Request $request; if ($lookup) { return $lookup }
     #
     # Teams:    ENG (team-eng), OPS (team-ops)
-    # States:   ENG Backlog, Todo, In Progress, Done, Canceled, Duplicate; OPS Todo, Doing, Done
+    # States:   ENG Backlog, Todo, In Progress, In Review, Done, Canceled, Duplicate; OPS Todo, Doing, Done
     # Labels:   workspace Bug, Feature, group Area with Frontend, retired Old;
     #           ENG Backend; OPS Incident and a second Frontend
     # Users:    Ada Lovelace (the viewer), Grace Hopper, and two users named Alex Smith
@@ -149,6 +149,7 @@ function Get-LinearTestLookupResponse {
             'team-eng' {
                 @(
                     @{ id = 'state-eng-duplicate'; name = 'Duplicate'; type = 'duplicate'; position = 0 }
+                    @{ id = 'state-eng-review'; name = 'In Review'; type = 'started'; position = 2.5 }
                     @{ id = 'state-eng-done'; name = 'Done'; type = 'completed'; position = 3 }
                     @{ id = 'state-eng-backlog'; name = 'Backlog'; type = 'backlog'; position = 0 }
                     @{ id = 'state-eng-progress'; name = 'In Progress'; type = 'started'; position = 2 }

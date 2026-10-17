@@ -57,7 +57,28 @@ Describe 'Name resolution' {
 
         It 'lists the valid states in workflow order for an unknown name' {
             { InModuleScope PSLinear { Resolve-LinearWorkflowStateId -TeamId 'team-eng' -State 'Doen' } } |
-                Should -Throw -ErrorId 'PSLinear.StateNotFound*' -ExpectedMessage "State 'Doen' was not found in team ENG. Valid states: Backlog, Todo, In Progress, Done, Canceled, Duplicate."
+                Should -Throw -ErrorId 'PSLinear.StateNotFound*' -ExpectedMessage "State 'Doen' was not found in team ENG. Valid states: Backlog, Todo, In Progress, In Review, Done, Canceled, Duplicate; state types: backlog, unstarted, started, completed, canceled, duplicate."
+        }
+
+        It 'resolves a state type to the team''s first state of that type' {
+            InModuleScope PSLinear {
+                Resolve-LinearWorkflowStateId -TeamId 'team-eng' -State 'Started'
+                Resolve-LinearWorkflowStateId -TeamId 'team-eng' -State 'completed'
+                Resolve-LinearWorkflowStateId -TeamId 'team-ops' -State 'started'
+            } | Should -Be @('state-eng-progress', 'state-eng-done', 'state-ops-doing')
+        }
+
+        It 'prefers a state name over a state type' {
+            InModuleScope PSLinear {
+                $script:LinearWorkflowStateCache['team-eng'] = @{
+                    Items   = @(
+                        [pscustomobject]@{ PSTypeName = 'PSLinear.WorkflowState'; Id = 'state-named-started'; Name = 'Started'; Type = 'unstarted'; Position = 0 }
+                        [pscustomobject]@{ PSTypeName = 'PSLinear.WorkflowState'; Id = 'state-doing'; Name = 'Doing'; Type = 'started'; Position = 1 }
+                    )
+                    Expires = [datetime]::UtcNow.AddMinutes(10)
+                }
+                Resolve-LinearWorkflowStateId -TeamId 'team-eng' -State 'started'
+            } | Should -Be 'state-named-started'
         }
 
         It 'accepts a state id without a lookup' {
