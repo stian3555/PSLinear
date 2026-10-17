@@ -14,6 +14,16 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - `Get-LinearIssue`: get issues by identifier or UUID, or list them with filters for team,
   state, state type, assignee, labels, project, priority, text search and current cycle, plus
   a raw `-Filter` for anything else. Streams results with automatic paging (`-First`, `-All`).
+- `New-LinearIssue`: create an issue in a team with a title, and optionally a description,
+  state, assignee, priority, labels, project, estimate, due date and parent issue.
+- `Set-LinearIssue`: change the same fields on issues given by identifier or piped in from
+  `Get-LinearIssue`, add or remove labels (`-AddLabel`, `-RemoveLabel`), remove the assignee
+  (`-Unassign`) or move an issue to another team. Returns the issues with `-PassThru`.
+- `Remove-LinearIssue`: archive issues, or move them to the trash with `-Delete` (restorable
+  for 30 days). Asks for confirmation by default.
+- The write commands accept names for teams, workflow states, labels, projects and users
+  (`me`, email, name or display name). Lookups are cached, and an unknown name fails with a
+  list of the valid values. `-WhatIf` sends no requests at all.
 - `Get-LinearTeam` with wildcard filtering, and tab completion for `-Team`.
 - `Get-LinearViewer` and `Get-LinearRateLimit`.
 - `Invoke-LinearGraphQL` for any query or mutation; mutations support `-WhatIf` and `-Confirm`.
