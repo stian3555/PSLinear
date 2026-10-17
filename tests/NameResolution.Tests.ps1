@@ -57,7 +57,7 @@ Describe 'Name resolution' {
 
         It 'lists the valid states in workflow order for an unknown name' {
             { InModuleScope PSLinear { Resolve-LinearWorkflowStateId -TeamId 'team-eng' -State 'Doen' } } |
-                Should -Throw -ErrorId 'PSLinear.StateNotFound*' -ExpectedMessage "State 'Doen' was not found in team ENG. Valid states: Backlog, Todo, In Progress, Done, Canceled."
+                Should -Throw -ErrorId 'PSLinear.StateNotFound*' -ExpectedMessage "State 'Doen' was not found in team ENG. Valid states: Backlog, Todo, In Progress, Done, Canceled, Duplicate."
         }
 
         It 'accepts a state id without a lookup' {

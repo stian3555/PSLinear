@@ -155,7 +155,7 @@ Describe 'New-LinearIssue' {
     Context 'Errors' {
         It 'stops on an unknown state, lists the valid states and creates nothing' {
             { New-LinearIssue -Team ENG -Title 'x' -State 'Doen' } |
-                Should -Throw -ErrorId 'PSLinear.StateNotFound*' -ExpectedMessage '*Valid states: Backlog, Todo, In Progress, Done, Canceled.'
+                Should -Throw -ErrorId 'PSLinear.StateNotFound*' -ExpectedMessage '*Valid states: Backlog, Todo, In Progress, Done, Canceled, Duplicate.'
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly -ParameterFilter {
                 (Get-RequestOperation $Body) -eq 'CreateIssue'
             }

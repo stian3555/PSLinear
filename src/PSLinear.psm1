@@ -34,6 +34,7 @@ $script:WorkflowStateTypeOrder = @{
     started   = 3
     completed = 4
     canceled  = 5
+    duplicate = 6
 }
 
 # Linear priority values (0-4) and their labels.
