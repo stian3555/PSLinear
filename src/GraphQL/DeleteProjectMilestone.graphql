@@ -1,0 +1,5 @@
+mutation DeleteProjectMilestone($id: String!) {
+  projectMilestoneDelete(id: $id) {
+    success
+  }
+}

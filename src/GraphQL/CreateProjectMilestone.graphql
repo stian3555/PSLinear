@@ -1,0 +1,8 @@
+mutation CreateProjectMilestone($input: ProjectMilestoneCreateInput!) {
+  projectMilestoneCreate(input: $input) {
+    success
+    projectMilestone {
+      ...ProjectMilestoneFields
+    }
+  }
+}
