@@ -98,13 +98,29 @@ function Invoke-Build {
     Write-Host "    Built $moduleName $version -> $outputPath"
 }
 
+function Invoke-AnalyzerWithRetry([string] $Path, [switch] $Recurse) {
+    # PSScriptAnalyzer intermittently fails with "Object reference not set to an instance of an
+    # object" (a NullReferenceException inside the analyzer, seen locally and in CI); running it
+    # again succeeds. Retry only that failure, so real errors and findings still surface.
+    $settings = Join-Path $PSScriptRoot 'PSScriptAnalyzerSettings.psd1'
+    $maxAttempts = 3
+    for ($attempt = 1; ; $attempt++) {
+        try {
+            return @(Invoke-ScriptAnalyzer -Path $Path -Recurse:$Recurse -Settings $settings)
+        }
+        catch {
+            if ($attempt -ge $maxAttempts -or $_.Exception.Message -notmatch 'Object reference not set') { throw }
+            Write-Warning "PSScriptAnalyzer failed on attempt $attempt of $($maxAttempts): $($_.Exception.Message) Retrying."
+        }
+    }
+}
+
 function Invoke-Analyze {
     Assert-Tool 'PSScriptAnalyzer'
     Import-Module PSScriptAnalyzer -MinimumVersion $requiredModules.PSScriptAnalyzer
     Write-Step 'Running PSScriptAnalyzer'
-    $settings = Join-Path $PSScriptRoot 'PSScriptAnalyzerSettings.psd1'
-    $findings = @(Invoke-ScriptAnalyzer -Path $sourcePath -Recurse -Settings $settings)
-    $findings += @(Invoke-ScriptAnalyzer -Path (Join-Path $PSScriptRoot 'build.ps1') -Settings $settings)
+    $findings = @(Invoke-AnalyzerWithRetry -Path $sourcePath -Recurse)
+    $findings += @(Invoke-AnalyzerWithRetry -Path (Join-Path $PSScriptRoot 'build.ps1'))
     if ($findings.Count -gt 0) {
         $findings | Format-Table -AutoSize Severity, RuleName, ScriptName, Line, Message | Out-String -Width 200 | Write-Host
         throw "PSScriptAnalyzer reported $($findings.Count) finding(s)."
