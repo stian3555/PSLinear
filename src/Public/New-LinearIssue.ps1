@@ -192,7 +192,8 @@ function New-LinearIssue {
             if ($Template) { $issueInput['templateId'] = Resolve-LinearTemplateId -TeamId $teamId -Template $Template }
             if ($PSBoundParameters.ContainsKey('Estimate')) {
                 if (-not (Test-LinearTeamUsesEstimate -TeamId $teamId)) {
-                    Write-Warning "Team $(Get-LinearTeamKey -TeamId $teamId) does not use estimates, so Linear ignores -Estimate. Turn on estimates in the team's settings to use it."
+                    $teamKey = Get-LinearTeamKey -TeamId $teamId
+                    Write-Warning "Team $teamKey does not use estimates, so Linear ignores -Estimate. Turn on estimates in the team's settings to use it."
                 }
                 $issueInput['estimate'] = $Estimate
             }

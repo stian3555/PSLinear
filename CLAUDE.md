@@ -14,7 +14,7 @@ PowerShell 7.4+ only (`CompatiblePSEditions = Core`), cross-platform.
 ## Layout
 
 - `src/Public/<Verb-Noun>.ps1`: one exported function per file. Add every new one to `FunctionsToExport` in `src/PSLinear.psd1`; a test enforces that the two match.
-- `src/Private/*.ps1`: helpers, grouped by concern (`Request.ps1`, `Context.ps1`, `Convert.ps1`, `Errors.ps1`, `Teams.ps1`).
+- `src/Private/*.ps1`: helpers, one file per concern. Infrastructure: `Request.ps1` (HTTP), `Context.ps1` (connection and caches), `OAuth.ps1`, `Git.ps1`, `Uploads.ps1`, `Errors.ps1`, `Convert.ps1` (every `ConvertTo-Linear<Type>`). Name resolution and lookups: one file per entity, such as `Teams.ps1`, `Projects.ps1` or `Documents.ps1`.
 - `src/GraphQL/<OperationName>.graphql`: one operation per file, and the operation name must equal the file name. Reusable fragments go in `src/GraphQL/Fragments/<FragmentName>.graphql`. Load them with `Get-LinearGraphQLDocument -Name <OperationName>`, which appends the fragments automatically. Never inline GraphQL strings in PowerShell code.
 - `src/PSLinear.Format.ps1xml`: default views for each `PSLinear.*` type.
 - `tests/*.Tests.ps1`: Pester 5. Shared helpers are in `tests/TestHelpers.ps1`.

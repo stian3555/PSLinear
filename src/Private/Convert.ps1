@@ -36,7 +36,9 @@ function ConvertTo-LinearIssue {
             Cycle         = Get-LinearNestedValue -InputObject $node.cycle -Name 'number'
             Milestone     = Get-LinearNestedValue -InputObject $node -Name 'projectMilestone.name'
             Delegate      = Get-LinearNestedValue -InputObject $node -Name 'delegate.name'
-            Labels        = [string[]]@(foreach ($label in @(Get-LinearNestedValue -InputObject $node -Name 'labels.nodes')) { Get-LinearNestedValue -InputObject $label -Name 'name' })
+            Labels        = [string[]]@(foreach ($label in @(Get-LinearNestedValue -InputObject $node -Name 'labels.nodes')) {
+                    Get-LinearNestedValue -InputObject $label -Name 'name'
+                })
             Parent        = Get-LinearNestedValue -InputObject $node.parent -Name 'identifier'
             Creator       = Get-LinearNestedValue -InputObject $node.creator -Name 'name'
             DueDate       = $node.dueDate
@@ -344,6 +346,8 @@ function ConvertTo-LinearInitiative {
             $subInitiativeNames = [string[]]@(Get-LinearNestedValue -InputObject $subInitiatives -Name 'nodes' | Where-Object { $null -ne $_ } | ForEach-Object { $_.name })
         }
         $priority = Get-LinearNestedValue -InputObject $node -Name 'priority'
+        $priorityLabel = $null
+        if ($null -ne $priority -and $priority -ge 0 -and $priority -le 4) { $priorityLabel = @('No priority', 'Urgent', 'High', 'Medium', 'Low')[$priority] }
 
         [pscustomobject]@{
             PSTypeName         = 'PSLinear.Initiative'
@@ -352,7 +356,7 @@ function ConvertTo-LinearInitiative {
             Status             = Get-LinearNestedValue -InputObject $node -Name 'status'
             Health             = ConvertFrom-LinearHealth -Value (Get-LinearNestedValue -InputObject $node -Name 'health')
             Priority           = $priority
-            PriorityLabel      = if ($null -ne $priority -and $priority -ge 0 -and $priority -le 4) { @('No priority', 'Urgent', 'High', 'Medium', 'Low')[$priority] } else { $null }
+            PriorityLabel      = $priorityLabel
             Owner              = Get-LinearNestedValue -InputObject $node -Name 'owner.name'
             LeadTeam           = Get-LinearNestedValue -InputObject $node -Name 'leadTeam.key'
             Projects           = [string[]]@($projects | ForEach-Object { Get-LinearNestedValue -InputObject $_ -Name 'name' })

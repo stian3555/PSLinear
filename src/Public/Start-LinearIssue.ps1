@@ -115,7 +115,8 @@ function Start-LinearIssue {
                 $PSCmdlet.ThrowTerminatingError($_)
             }
             if (-not $inRepository) {
-                $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message "$((Get-Location).Path) is not in a git repository. Run the command in your repository, or use -NoBranch." `
+                $message = "$((Get-Location).Path) is not in a git repository. Run the command in your repository, or use -NoBranch."
+                $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message $message `
                             -ErrorId 'PSLinear.NotInGitRepository' -Category ObjectNotFound -TargetObject (Get-Location).Path))
             }
         }
@@ -136,7 +137,8 @@ function Start-LinearIssue {
 
         foreach ($target in $targets) {
             if (-not $NoBranch -and $started -ge 1) {
-                $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message "Only one git branch can be checked out, so $($target.Name) was not started. Use -NoBranch to start several issues." `
+                $message = "Only one git branch can be checked out, so $($target.Name) was not started. Use -NoBranch to start several issues."
+                $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message $message `
                             -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument -TargetObject $target.Name))
             }
             if (-not $PSCmdlet.ShouldProcess($target.Name, $action)) {

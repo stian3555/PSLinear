@@ -127,7 +127,8 @@ function Start-LinearOAuthBrowser {
     .SYNOPSIS
         Opens the consent page in the default browser and shows the URL in case it does not open.
     #>
-    [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '', Justification = 'The sign-in URL is an interactive prompt for the person running Connect-Linear.')]
+    [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '',
+        Justification = 'The sign-in URL is an interactive prompt for the person running Connect-Linear.')]
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Opens a browser window only.')]
     [CmdletBinding()]
     param(
@@ -183,8 +184,9 @@ function Wait-LinearOAuthCallback {
         }
     }
     if ($listeners.Count -eq 0) {
-        throw (New-LinearErrorRecord -Message "Could not listen on port $($RedirectUri.Port) for the sign-in callback. Close the program that uses it, or use -RedirectUri with another port (and register it in your OAuth application)." `
-                -ErrorId 'PSLinear.OAuthFailed' -Category ResourceUnavailable -TargetObject $RedirectUri)
+        $message = ("Could not listen on port $($RedirectUri.Port) for the sign-in callback. Close the program that uses it, " +
+            'or use -RedirectUri with another port (and register it in your OAuth application).')
+        throw (New-LinearErrorRecord -Message $message -ErrorId 'PSLinear.OAuthFailed' -Category ResourceUnavailable -TargetObject $RedirectUri)
     }
 
     try {
@@ -232,13 +234,21 @@ function Wait-LinearOAuthCallback {
                         Error            = $values['error']
                         ErrorDescription = $values['error_description']
                     }
-                    $message = if ($result.Error) { 'Linear sign-in was not completed. You can close this tab and return to PowerShell.' } else { 'You are signed in to Linear. You can close this tab and return to PowerShell.' }
-                    $body = "<!DOCTYPE html><html><head><meta charset=`"utf-8`"><title>PSLinear</title></head><body style=`"font-family: sans-serif; margin: 3em`"><p>$message</p></body></html>"
+                    $outcome = if ($result.Error) { 'Linear sign-in was not completed.' } else { 'You are signed in to Linear.' }
+                    $body = ('<!DOCTYPE html><html><head><meta charset="utf-8"><title>PSLinear</title></head>' +
+                        "<body style=`"font-family: sans-serif; margin: 3em`"><p>$outcome You can close this tab and return to PowerShell.</p></body></html>")
                     $status = '200 OK'
                 }
 
                 $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($body)
-                $headerText = "HTTP/1.1 $status`r`nContent-Type: text/html; charset=utf-8`r`nContent-Length: $($bodyBytes.Length)`r`nConnection: close`r`nCache-Control: no-store`r`n`r`n"
+                $headerText = (
+                    "HTTP/1.1 $status",
+                    'Content-Type: text/html; charset=utf-8',
+                    "Content-Length: $($bodyBytes.Length)",
+                    'Connection: close',
+                    'Cache-Control: no-store',
+                    '', ''
+                ) -join "`r`n"
                 $headerBytes = [System.Text.Encoding]::ASCII.GetBytes($headerText)
                 $stream.Write($headerBytes, 0, $headerBytes.Length)
                 $stream.Write($bodyBytes, 0, $bodyBytes.Length)
@@ -306,7 +316,8 @@ function Save-LinearOAuthSecret {
         Saves the context's refresh token to its SecretManagement secret, so a later
         Connect-Linear -Browser -SecretName can sign in without the browser.
     #>
-    [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Called by Connect-Linear and token refreshes, which the person started; the secret only holds the current refresh token.')]
+    [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '',
+        Justification = 'Called by Connect-Linear and token refreshes, which the person started; the secret only holds the current refresh token.')]
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
@@ -327,7 +338,8 @@ function Update-LinearOAuthToken {
         Linear issues a new refresh token with every refresh, so the saved secret is updated too.
         Throws an ErrorRecord (PSLinear.TokenRefreshFailed) that asks the person to sign in again.
     #>
-    [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Renews the session credential in memory, as part of a request the person started.')]
+    [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '',
+        Justification = 'Renews the session credential in memory, as part of a request the person started.')]
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
@@ -405,7 +417,8 @@ function Invoke-LinearOAuthLogin {
 
     if ($callback.Error) {
         $reason = if ($callback.ErrorDescription) { "$($callback.Error): $($callback.ErrorDescription)" } else { $callback.Error }
-        throw (New-LinearErrorRecord -Message "Linear sign-in was not completed ($reason)." -ErrorId 'PSLinear.OAuthFailed' -Category AuthenticationError -TargetObject $callback.Error)
+        throw (New-LinearErrorRecord -Message "Linear sign-in was not completed ($reason)." `
+                -ErrorId 'PSLinear.OAuthFailed' -Category AuthenticationError -TargetObject $callback.Error)
     }
     if ($callback.State -ne $state) {
         throw (New-LinearErrorRecord -Message 'The sign-in callback did not match this sign-in (state mismatch), so it was ignored. Run Connect-Linear -Browser again.' `

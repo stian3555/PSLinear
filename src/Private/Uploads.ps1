@@ -151,7 +151,8 @@ function Invoke-LinearFileUpload {
     $data = Invoke-LinearRequest -Query (Get-LinearGraphQLDocument -Name 'RequestFileUpload') -Variables $variables
     $target = Get-LinearNestedValue -InputObject $data -Name 'fileUpload.uploadFile'
     if (-not (Get-LinearNestedValue -InputObject $data -Name 'fileUpload.success') -or $null -eq $target) {
-        throw (New-LinearErrorRecord -Message "Linear did not provide an upload URL for '$($File.Name)'." -ErrorId 'PSLinear.UploadFailed' -Category WriteError -TargetObject $File.FullName)
+        throw (New-LinearErrorRecord -Message "Linear did not provide an upload URL for '$($File.Name)'." `
+                -ErrorId 'PSLinear.UploadFailed' -Category WriteError -TargetObject $File.FullName)
     }
 
     # Linear's signed headers must be sent as given. A content-type among them replaces ours.

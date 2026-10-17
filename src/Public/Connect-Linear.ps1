@@ -207,7 +207,8 @@ function Connect-Linear {
             }
             'Secret' {
                 if (-not (Get-Command -Name 'Get-Secret' -ErrorAction SilentlyContinue)) {
-                    throw 'Reading from a vault requires the Microsoft.PowerShell.SecretManagement module. Install it with: Install-PSResource Microsoft.PowerShell.SecretManagement'
+                    throw ('Reading from a vault requires the Microsoft.PowerShell.SecretManagement module. ' +
+                        'Install it with: Install-PSResource Microsoft.PowerShell.SecretManagement')
                 }
                 $secretParameters = @{ Name = $SecretName; ErrorAction = 'Stop' }
                 if ($Vault) { $secretParameters['Vault'] = $Vault }
@@ -234,7 +235,8 @@ function Connect-Linear {
                 $resolvedClientId = @($ClientId, $env:LINEAR_OAUTH_CLIENT_ID, $script:DefaultOAuthClientId) |
                     Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1
                 if ($SecretName -and -not (Get-Command -Name 'Set-Secret' -ErrorAction SilentlyContinue)) {
-                    throw 'Saving the sign-in in a vault requires the Microsoft.PowerShell.SecretManagement module. Install it with: Install-PSResource Microsoft.PowerShell.SecretManagement'
+                    throw ('Saving the sign-in in a vault requires the Microsoft.PowerShell.SecretManagement module. ' +
+                        'Install it with: Install-PSResource Microsoft.PowerShell.SecretManagement')
                 }
 
                 $tokens = $null
