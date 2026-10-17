@@ -85,6 +85,36 @@ Describe 'Add-LinearAttachment' {
         }
     }
 
+    Context 'Metadata' {
+        It 'stores metadata on an uploaded file' {
+            $attachment = Add-LinearAttachment -Issue ENG-1 -Path (Join-Path $TestDrive 'files/spec.pdf') -Metadata @{ pipeline = 'nightly'; failures = 3 }
+            $attachment.Metadata.pipeline | Should -Be 'nightly'
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
+                (Get-RequestOperation $Body) -eq 'CreateAttachment' -and
+                (Get-RequestVariable $Body 'input.metadata.pipeline') -eq 'nightly' -and
+                (Get-RequestVariable $Body 'input.metadata.failures') -eq 3
+            }
+        }
+
+        It 'sets metadata on a link right after creating it, keeping the title' {
+            $attachment = Add-LinearAttachment -Issue ENG-1 -Url 'https://example.com/doc' -Metadata @{ source = 'wiki' }
+            $attachment.Metadata.source | Should -Be 'wiki'
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                (Get-RequestOperation $Body) -eq 'UpdateAttachment' -and
+                (Get-RequestVariable $Body 'id') -eq 'attachment-link' -and
+                (Get-RequestVariable $Body 'input.title') -eq 'Title from Linear' -and
+                (Get-RequestVariable $Body 'input.metadata.source') -eq 'wiki'
+            }
+        }
+
+        It 'refuses values that are not strings or numbers, before sending anything' {
+            { Add-LinearAttachment -Issue ENG-1 -Url 'https://example.com' -Metadata @{ done = $true } } |
+                Should -Throw -ErrorId 'PSLinear.InvalidArgument*' -ExpectedMessage "*Metadata value 'done' is Boolean; Linear accepts only strings and numbers.*"
+            { Add-LinearAttachment -Issue ENG-1 -Url 'https://example.com' -Metadata @{ nested = @{ a = 1 } } } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*'
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
+        }
+    }
+
     Context 'Public uploads' {
         It 'uploads images to a public URL with a warning' {
             Add-LinearAttachment -Issue ENG-1 -Path (Join-Path $TestDrive 'files/screenshot.png') -Public -WarningVariable uploadWarnings -WarningAction SilentlyContinue | Out-Null

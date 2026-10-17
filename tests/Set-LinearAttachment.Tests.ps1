@@ -51,6 +51,34 @@ Describe 'Set-LinearAttachment' {
         }
     }
 
+    It 'replaces the metadata, keeping the title' {
+        $attachment = Set-LinearAttachment -Id attachment-2 -Metadata @{ status = 'closed'; reviews = 3 } -PassThru
+        $attachment.Metadata.status | Should -Be 'closed'
+        Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
+            (Get-RequestOperation $Body) -eq 'UpdateAttachment' -and
+            (Get-RequestVariable $Body 'input.title') -eq 'Fix login' -and
+            (Get-RequestVariable $Body 'input.metadata.reviews') -eq 3
+        }
+    }
+
+    It 'removes the metadata with an empty hashtable' {
+        Set-LinearAttachment -Id attachment-2 -Title 'Fix login' -Metadata @{}
+        Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
+            $metadata = Get-RequestVariable $Body 'input.metadata'
+            $null -ne $metadata -and $metadata.Count -eq 0
+        }
+    }
+
+    It 'refuses metadata values that are not strings or numbers' {
+        { Set-LinearAttachment -Id attachment-2 -Metadata @{ when = [datetime]'2026-01-01' } } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*'
+        Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
+    }
+
+    It 'shows the metadata in the -WhatIf message' {
+        $message = InModuleScope PSLinear { Format-LinearChangeList -BoundParameters @{ Metadata = [ordered]@{ a = 1; b = 'x' } } -Name 'Metadata' }
+        $message | Should -Be "Metadata='{a=1; b=x}'"
+    }
+
     It 'requires -Title or -Subtitle' {
         { Set-LinearAttachment -Id attachment-1 } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*'
     }

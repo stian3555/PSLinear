@@ -198,6 +198,40 @@ function Invoke-LinearFileUpload {
     }
 }
 
+function ConvertTo-LinearAttachmentMetadataInput {
+    <#
+    .SYNOPSIS
+        Checks attachment metadata given as a hashtable and returns it for the API.
+    .DESCRIPTION
+        Linear accepts an object of string and number values. Keys become strings; a value of any
+        other type (a boolean, a date, a nested object or a list) is refused before anything is
+        sent.
+    .NOTES
+        Throws an ErrorRecord (PSLinear.InvalidArgument) that callers rethrow with $PSCmdlet.ThrowTerminatingError.
+    #>
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyCollection()]
+        [System.Collections.IDictionary] $Metadata
+    )
+
+    $numberTypes = [byte], [sbyte], [int16], [uint16], [int], [uint32], [long], [uint64], [single], [double], [decimal]
+    $result = @{}
+    foreach ($entry in $Metadata.GetEnumerator()) {
+        $value = $entry.Value
+        $isAllowed = $value -is [string] -or $null -ne ($numberTypes | Where-Object { $value -is $_ } | Select-Object -First 1)
+        if (-not $isAllowed) {
+            $typeName = if ($null -eq $value) { 'null' } else { $value.GetType().Name }
+            throw (New-LinearErrorRecord -Message "Metadata value '$($entry.Key)' is $typeName; Linear accepts only strings and numbers." `
+                    -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument -TargetObject $entry.Key)
+        }
+        $result[[string]$entry.Key] = $value
+    }
+    $result
+}
+
 function Format-LinearFileSize {
     <#
     .SYNOPSIS

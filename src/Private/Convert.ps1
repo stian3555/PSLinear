@@ -256,7 +256,8 @@ function ConvertTo-LinearAttachment {
         Flattens an Attachment node (AttachmentFields fragment) into a PSLinear.Attachment object.
     .NOTES
         Source is the integration that created a link (github, slack, ...), or null for uploads
-        and plain links.
+        and plain links. Metadata is an ordered hashtable: values you set, or what an integration
+        stores (which can be nested).
     #>
     [CmdletBinding()]
     [OutputType('PSLinear.Attachment')]
@@ -271,6 +272,11 @@ function ConvertTo-LinearAttachment {
         # Linear reports uploads and plain links as source 'unknown'.
         $source = Get-LinearNestedValue -InputObject $InputObject -Name 'sourceType'
         if ($source -eq 'unknown') { $source = $null }
+        $metadata = [ordered]@{}
+        $rawMetadata = Get-LinearNestedValue -InputObject $InputObject -Name 'metadata'
+        if ($null -ne $rawMetadata) {
+            foreach ($property in $rawMetadata.PSObject.Properties) { $metadata[$property.Name] = $property.Value }
+        }
         [pscustomobject]@{
             PSTypeName = 'PSLinear.Attachment'
             Id         = $InputObject.id
@@ -279,6 +285,7 @@ function ConvertTo-LinearAttachment {
             Subtitle   = Get-LinearNestedValue -InputObject $InputObject -Name 'subtitle'
             Url        = Get-LinearNestedValue -InputObject $InputObject -Name 'url'
             Source     = $source
+            Metadata   = $metadata
             Creator    = Get-LinearNestedValue -InputObject $InputObject -Name 'creator.name'
             CreatedAt  = Get-LinearNestedValue -InputObject $InputObject -Name 'createdAt'
             UpdatedAt  = Get-LinearNestedValue -InputObject $InputObject -Name 'updatedAt'

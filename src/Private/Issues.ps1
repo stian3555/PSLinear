@@ -24,6 +24,10 @@ function Format-LinearChangeList {
             if ($value.IsPresent) { $key }
             continue
         }
+        if ($value -is [System.Collections.IDictionary]) {
+            $pairs = foreach ($entry in $value.GetEnumerator()) { "$($entry.Key)=$($entry.Value)" }
+            $value = '{' + ($pairs -join '; ') + '}'
+        }
 
         $texts = foreach ($item in @($value)) {
             $text = if ($item -is [datetime]) { ConvertTo-LinearTimelessDate -Date $item } else { [string]$item -replace '\s+', ' ' }

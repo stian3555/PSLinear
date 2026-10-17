@@ -35,6 +35,9 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - `Get-LinearIssue` filters by `-Cycle`, `-Milestone` and `-Delegate`, and issues include their
   milestone and delegate.
 - `Get-LinearTemplate` lists issue, project and document templates.
+- Attachment metadata: `Add-LinearAttachment -Metadata` and `Set-LinearAttachment -Metadata` store
+  a hashtable of string and number values on an attachment (other value types are refused), and
+  attachments expose their `Metadata`, including what integrations store.
 - `-Project` parameters also accept a project's slug id and URL.
 
 ## [0.1.0] - 2026-10-17

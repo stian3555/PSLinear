@@ -190,8 +190,8 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { 
 | `Set-LinearComment` | Edit a comment, or resolve or reopen its thread. |
 | `Remove-LinearComment` | Delete comments. |
 | `Get-LinearAttachment` | Attachments of issues: uploaded files, links and integration links. |
-| `Add-LinearAttachment` | Upload files to an issue (private by default) or link a URL to it. |
-| `Set-LinearAttachment` | Change an attachment's title or subtitle. |
+| `Add-LinearAttachment` | Upload files to an issue (private by default) or link a URL to it, with optional metadata. |
+| `Set-LinearAttachment` | Change an attachment's title, subtitle or metadata. |
 | `Remove-LinearAttachment` | Remove attachments from issues. |
 | `Get-LinearIssueRelation` | Relations of an issue, seen from it: Blocks, BlockedBy, Related, DuplicateOf, DuplicatedBy. |
 | `Add-LinearIssueRelation` | Relate issues: blocks, blocked by, related or duplicate. |

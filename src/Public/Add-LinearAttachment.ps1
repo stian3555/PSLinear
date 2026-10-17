@@ -41,6 +41,12 @@ function Add-LinearAttachment {
     .PARAMETER Public
         Uploads images to a public URL instead of a private one.
 
+    .PARAMETER Metadata
+        Your own data to store on the attachment, as a hashtable of string and number values,
+        for example @{ build = '1.4.2'; runId = 8812 }. For -Url the link is created first and
+        the metadata set right after, so integrations still get their rich links; your metadata
+        then replaces whatever the integration stored on the link.
+
     .EXAMPLE
         Add-LinearAttachment ENG-123 ./screenshot.png
 
@@ -55,6 +61,11 @@ function Add-LinearAttachment {
         Add-LinearAttachment -Issue ENG-123 -Url https://github.com/acme/app/pull/42 -Title 'Fix PR'
 
         Links a pull request to an issue.
+
+    .EXAMPLE
+        Add-LinearAttachment ENG-123 ./report.html -Metadata @{ pipeline = 'nightly'; failures = 3 }
+
+        Attaches a test report with metadata that scripts can read back from Get-LinearAttachment.
 
     .EXAMPLE
         Get-LinearIssue ENG-123 | Add-LinearAttachment -Path ./spec.pdf -Subtitle 'Version 2' -WhatIf
@@ -102,8 +113,20 @@ function Add-LinearAttachment {
         [string] $Comment,
 
         [Parameter(ParameterSetName = 'File')]
-        [switch] $Public
+        [switch] $Public,
+
+        [ValidateNotNull()]
+        [System.Collections.IDictionary] $Metadata
     )
+
+    begin {
+        try {
+            $metadataInput = if ($PSBoundParameters.ContainsKey('Metadata')) { ConvertTo-LinearAttachmentMetadataInput -Metadata $Metadata } else { $null }
+        }
+        catch {
+            $PSCmdlet.ThrowTerminatingError($_)
+        }
+    }
 
     process {
         $issueName = ConvertTo-LinearIssueIdentifier -Value $Issue
@@ -120,6 +143,19 @@ function Add-LinearAttachment {
                 $message = Format-LinearFailureMessage -Message "Linear did not link '$Url' to $issueName." -Errors $result.Errors
                 $PSCmdlet.WriteError((New-LinearErrorRecord -Message $message -ErrorId 'PSLinear.AttachmentCreateFailed' -Category WriteError -TargetObject $issueName))
                 return
+            }
+            if ($null -ne $metadataInput) {
+                # attachmentLinkURL takes no metadata, so set it on the new link.
+                $update = Invoke-LinearRequest -Query (Get-LinearGraphQLDocument -Name 'UpdateAttachment') `
+                    -Variables @{ id = $attachment.id; input = @{ title = $attachment.title; metadata = $metadataInput } } -IncludeErrors
+                $updated = Get-LinearNestedValue -InputObject $update.Data -Name 'attachmentUpdate.attachment'
+                if (-not (Get-LinearNestedValue -InputObject $update.Data -Name 'attachmentUpdate.success') -or $null -eq $updated) {
+                    $message = Format-LinearFailureMessage -Message "Linked '$Url' to $issueName, but Linear did not store the metadata." -Errors $update.Errors
+                    $PSCmdlet.WriteError((New-LinearErrorRecord -Message $message -ErrorId 'PSLinear.AttachmentUpdateFailed' -Category WriteError -TargetObject $attachment.id))
+                }
+                else {
+                    $attachment = $updated
+                }
             }
             ConvertTo-LinearAttachment -InputObject $attachment
             return
@@ -179,6 +215,7 @@ function Add-LinearAttachment {
             }
             if ($Subtitle) { $attachmentInput['subtitle'] = $Subtitle }
             if ($Comment) { $attachmentInput['commentBody'] = $Comment }
+            if ($null -ne $metadataInput) { $attachmentInput['metadata'] = $metadataInput }
 
             $result = Invoke-LinearRequest -Query (Get-LinearGraphQLDocument -Name 'CreateAttachment') -Variables @{ input = $attachmentInput } -IncludeErrors
             $attachment = Get-LinearNestedValue -InputObject $result.Data -Name 'attachmentCreate.attachment'

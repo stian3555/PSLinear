@@ -455,7 +455,8 @@ function New-LinearTestAttachmentNode {
         [string] $Url = 'https://uploads.linear.app/asset/screenshot.png',
         [string] $Issue = 'ENG-1',
         [string] $SourceType,
-        [string] $CreatedAt = '2026-10-10T10:00:00.000Z'
+        [string] $CreatedAt = '2026-10-10T10:00:00.000Z',
+        [System.Collections.IDictionary] $Metadata = @{}
     )
     [ordered]@{
         id         = $Id
@@ -463,6 +464,7 @@ function New-LinearTestAttachmentNode {
         subtitle   = if ($Subtitle) { $Subtitle } else { $null }
         url        = $Url
         sourceType = if ($SourceType) { $SourceType } else { $null }
+        metadata   = $Metadata
         createdAt  = $CreatedAt
         updatedAt  = $CreatedAt
         creator    = @{ id = 'user-ada'; name = 'Ada Lovelace' }
@@ -487,7 +489,7 @@ function Get-LinearTestAttachmentResponse {
     $notFound = New-LinearTestError -Message 'Entity not found: Attachment' -Code 'INPUT_ERROR'
     $attachments = @{
         'attachment-1' = New-LinearTestAttachmentNode -Id 'attachment-1' -SourceType 'unknown' -CreatedAt '2026-10-09T09:00:00.000Z'
-        'attachment-2' = New-LinearTestAttachmentNode -Id 'attachment-2' -Title 'Fix login' -Url 'https://github.com/acme/app/pull/42' -SourceType 'github' -Subtitle 'PR #42'
+        'attachment-2' = New-LinearTestAttachmentNode -Id 'attachment-2' -Title 'Fix login' -Url 'https://github.com/acme/app/pull/42' -SourceType 'github' -Subtitle 'PR #42' -Metadata ([ordered]@{ status = 'merged'; reviews = @{ approved = 2 } })
     }
 
     if ($query -match 'query GetIssueTeam') {
@@ -522,7 +524,8 @@ function Get-LinearTestAttachmentResponse {
             return New-LinearTestResponse -Data @{ attachmentCreate = $null } -Errors @(New-LinearTestError -Message 'Argument Validation Error' -Code 'INPUT_ERROR')
         }
         $issue = $attachmentInput['issueId'] -replace '^issue-uuid-', ''
-        $node = New-LinearTestAttachmentNode -Id 'attachment-new' -Title $attachmentInput['title'] -Subtitle $attachmentInput['subtitle'] -Url $attachmentInput['url'] -Issue $issue
+        $metadata = if ($attachmentInput.Contains('metadata')) { $attachmentInput['metadata'] } else { @{} }
+        $node = New-LinearTestAttachmentNode -Id 'attachment-new' -Title $attachmentInput['title'] -Subtitle $attachmentInput['subtitle'] -Url $attachmentInput['url'] -Issue $issue -Metadata $metadata
         return New-LinearTestResponse -Data @{ attachmentCreate = @{ success = $true; attachment = $node } }
     }
     if ($query -match 'mutation LinkAttachmentUrl') {
@@ -546,10 +549,15 @@ function Get-LinearTestAttachmentResponse {
         return New-LinearTestResponse -Data @{ attachment = $attachments[$variables.id] }
     }
     if ($query -match 'mutation UpdateAttachment') {
+        if ($variables.id -eq 'attachment-link') {
+            $node = New-LinearTestAttachmentNode -Id 'attachment-link' -Title $variables.input['title'] -Url 'https://example.com/doc' -Metadata $variables.input['metadata']
+            return New-LinearTestResponse -Data @{ attachmentUpdate = @{ success = $true; attachment = $node } }
+        }
         if (-not $attachments.ContainsKey($variables.id)) { return New-LinearTestResponse -Data @{ attachmentUpdate = $null } -Errors @($notFound) }
         $node = $attachments[$variables.id]
         $node['title'] = $variables.input['title']
         if ($variables.input.Contains('subtitle')) { $node['subtitle'] = $variables.input['subtitle'] }
+        if ($variables.input.Contains('metadata')) { $node['metadata'] = $variables.input['metadata'] }
         return New-LinearTestResponse -Data @{ attachmentUpdate = @{ success = $true; attachment = $node } }
     }
     if ($query -match 'mutation DeleteAttachment') {
