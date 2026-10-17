@@ -93,7 +93,9 @@ Connect-Linear -SecretName LinearApiKey
 address, like the official Linear integrations do. It uses OAuth 2.0 with PKCE, so there is no
 client secret to keep. You need the client id of a Linear OAuth application:
 
-1. In Linear, go to **Settings > API > OAuth applications** and create an application.
+1. In Linear, go to **Settings > API > OAuth applications** and create an application. Its
+   name is shown on the consent page and cannot contain the word "Linear"; something like
+   "PSL" or "PowerShell CLI" works.
 2. Add these callback URLs:
    `http://localhost:47821/callback` and `http://127.0.0.1:47821/callback`.
 3. Connect with its client id (or set `LINEAR_OAUTH_CLIENT_ID`):
