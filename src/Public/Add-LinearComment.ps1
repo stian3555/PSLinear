@@ -1,13 +1,13 @@
 function Add-LinearComment {
     <#
     .SYNOPSIS
-        Adds a comment to a Linear issue or project, or replies to a comment.
+        Adds a comment to a Linear issue, project or initiative, or replies to a comment.
 
     .DESCRIPTION
         Adds a comment, written in Markdown, and returns it.
 
-        Give the issue by identifier (ENG-123), UUID or URL, the project by name, slug id, URL or
-        id, or pipe in issues and projects. To reply, use -ReplyTo with a comment id, or pipe in
+        Give the issue by identifier (ENG-123), UUID or URL, the project or initiative by name,
+        slug id, URL or id, or pipe in issues, projects and initiatives. To reply, use -ReplyTo with a comment id, or pipe in
         PSLinear.Comment objects. Linear threads are one level deep, so a reply to a reply is
         added to the same thread.
 
@@ -15,7 +15,8 @@ function Add-LinearComment {
         the comment, other files as links. Uploads are private (only workspace members can open
         them) unless -Public, which uploads images to a public URL and warns about it.
 
-        With -WhatIf nothing is sent to Linear, not even the project or comment lookups.
+        With -WhatIf nothing is sent to Linear, not even the project, initiative or comment
+        lookups.
 
     .PARAMETER Issue
         The issue identifier (ENG-123), UUID or URL.
@@ -23,9 +24,12 @@ function Add-LinearComment {
     .PARAMETER Project
         A project name, slug id (the hex suffix of its URL), URL or id.
 
+    .PARAMETER Initiative
+        An initiative name, slug id (the hex suffix of its URL), URL or id.
+
     .PARAMETER InputObject
-        PSLinear.Issue or PSLinear.Project objects to comment on, or PSLinear.Comment objects to
-        reply to.
+        PSLinear.Issue, PSLinear.Project or PSLinear.Initiative objects to comment on, or
+        PSLinear.Comment objects to reply to.
 
     .PARAMETER ReplyTo
         The id of the comment to reply to.
@@ -68,6 +72,7 @@ function Add-LinearComment {
     .INPUTS
         PSLinear.Issue
         PSLinear.Project
+        PSLinear.Initiative
         PSLinear.Comment
 
     .OUTPUTS
@@ -92,6 +97,10 @@ function Add-LinearComment {
         [Parameter(Mandatory, ParameterSetName = 'Project')]
         [ValidateNotNullOrEmpty()]
         [string] $Project,
+
+        [Parameter(Mandatory, ParameterSetName = 'Initiative')]
+        [ValidateNotNullOrEmpty()]
+        [string] $Initiative,
 
         [Parameter(Mandatory, ValueFromPipeline, ParameterSetName = 'ByObject')]
         [object] $InputObject,
@@ -137,7 +146,7 @@ function Add-LinearComment {
                 "comment $($replyToObject.Id) on $(Get-LinearNestedValue -InputObject $replyToObject -Name 'Target')"
             }
             else {
-                (Get-LinearCommentTarget -Issue $Issue -Project $Project -InputObject $InputObject).Name
+                (Get-LinearCommentTarget -Issue $Issue -Project $Project -Initiative $Initiative -InputObject $InputObject).Name
             }
 
             $files = @(if ($Attachment) { Resolve-LinearUploadFile -Path $Attachment })
@@ -177,22 +186,24 @@ function Add-LinearComment {
                 $parent = $lookup.Comment
             }
             # Linear threads are one level deep: a reply to a reply belongs to the same thread. The
-            # parent also tells which issue or project the reply is on.
+            # parent also tells which issue, project or initiative the reply is on.
             $parentId = Get-LinearNestedValue -InputObject $parent -Name 'ParentId'
             $commentInput['parentId'] = if ($parentId) { $parentId } else { $parent.Id }
             $issueId = Get-LinearNestedValue -InputObject $parent -Name 'IssueId'
             $projectId = Get-LinearNestedValue -InputObject $parent -Name 'ProjectId'
+            $initiativeId = Get-LinearNestedValue -InputObject $parent -Name 'InitiativeId'
             if ($issueId) { $commentInput['issueId'] = $issueId }
             elseif ($projectId) { $commentInput['projectId'] = $projectId }
+            elseif ($initiativeId) { $commentInput['initiativeId'] = $initiativeId }
         }
         else {
             try {
-                $target = Get-LinearCommentTarget -Issue $Issue -Project $Project -InputObject $InputObject -Resolve
+                $target = Get-LinearCommentTarget -Issue $Issue -Project $Project -Initiative $Initiative -InputObject $InputObject -Resolve
             }
             catch {
                 $PSCmdlet.ThrowTerminatingError($_)
             }
-            $commentInput[$(if ($target.Kind -eq 'Issue') { 'issueId' } else { 'projectId' })] = $target.Id
+            $commentInput[$(switch ($target.Kind) { 'Issue' { 'issueId' } 'Project' { 'projectId' } default { 'initiativeId' } })] = $target.Id
         }
 
         # Uploaded files go at the end of the comment, one per line.

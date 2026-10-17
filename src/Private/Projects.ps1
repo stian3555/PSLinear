@@ -187,32 +187,7 @@ function Resolve-LinearProjectLabelId {
         [string[]] $Label
     )
 
-    foreach ($name in $Label) {
-        if (Test-LinearGuid -Value $name) {
-            $name
-            continue
-        }
-        $match = @()
-        foreach ($refresh in $false, $true) {
-            $match = @(Get-LinearProjectLabelCache -Refresh:$refresh | Where-Object { $null -ne $_ -and $_.Name -eq $name })
-            if ($match.Count -gt 0) { break }
-        }
-        if ($match.Count -eq 1) {
-            $match[0].Id
-            continue
-        }
-        if ($match.Count -gt 1) {
-            $matchList = ($match | ForEach-Object {
-                    $scope = if ($_.Team) { "team $($_.Team)" } else { 'workspace' }
-                    "$(if ($_.Group) { "$($_.Group)/" })$($_.Name) ($scope, id $($_.Id))"
-                }) -join '; '
-            throw (New-LinearErrorRecord -Message "Project label '$name' is ambiguous. Use the label id instead. Matches: $matchList." `
-                    -ErrorId 'PSLinear.AmbiguousLabel' -Category InvalidArgument -TargetObject $name)
-        }
-        $available = Format-LinearValueList -Value (Get-LinearProjectLabelCache | Where-Object { $null -ne $_ } | ForEach-Object Name | Select-Object -Unique)
-        throw (New-LinearErrorRecord -Message "Project label '$name' was not found. Valid project labels: $available." `
-                -ErrorId 'PSLinear.LabelNotFound' -Category ObjectNotFound -TargetObject $name)
-    }
+    Resolve-LinearListedLabelId -Label $Label -CacheCommand 'Get-LinearProjectLabelCache' -Noun 'Project label'
 }
 
 function Reset-LinearProjectCache {

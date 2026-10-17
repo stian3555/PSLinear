@@ -1,0 +1,17 @@
+query ListInitiativeLabels($first: Int, $after: String) {
+  initiativeLabels(first: $first, after: $after) {
+    nodes {
+      id
+      name
+      isGroup
+      retiredAt
+      parent {
+        name
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

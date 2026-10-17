@@ -195,7 +195,6 @@ function ConvertTo-LinearProject {
         if ($null -eq (Get-LinearNestedValue -InputObject $node -Name 'allLabels')) { $labels = @(Get-LinearNestedValue -InputObject $node -Name 'labels.nodes') }
         $teams = @($teams | Where-Object { $null -ne $_ })
         $labels = @($labels | Where-Object { $null -ne $_ })
-        $health = [string](Get-LinearNestedValue -InputObject $node -Name 'health')
         # Assigned directly rather than through an if expression, which would unroll an empty
         # list to $null and a single name to a string.
         $memberNames = $null
@@ -218,7 +217,7 @@ function ConvertTo-LinearProject {
             Name          = $node.name
             Status        = Get-LinearNestedValue -InputObject $node -Name 'status.name'
             StatusType    = Get-LinearNestedValue -InputObject $node -Name 'status.type'
-            Health        = if ($health) { $health.Substring(0, 1).ToUpperInvariant() + $health.Substring(1) } else { $null }
+            Health        = ConvertFrom-LinearHealth -Value (Get-LinearNestedValue -InputObject $node -Name 'health')
             Priority      = Get-LinearNestedValue -InputObject $node -Name 'priority'
             PriorityLabel = Get-LinearNestedValue -InputObject $node -Name 'priorityLabel'
             Lead          = Get-LinearNestedValue -InputObject $node -Name 'lead.name'
@@ -261,12 +260,11 @@ function ConvertTo-LinearProjectUpdate {
 
     process {
         if ($null -eq $InputObject) { return }
-        $health = [string](Get-LinearNestedValue -InputObject $InputObject -Name 'health')
         [pscustomobject]@{
             PSTypeName = 'PSLinear.ProjectUpdate'
             Id         = $InputObject.id
             Project    = Get-LinearNestedValue -InputObject $InputObject -Name 'project.name'
-            Health     = if ($health) { $health.Substring(0, 1).ToUpperInvariant() + $health.Substring(1) } else { $null }
+            Health     = ConvertFrom-LinearHealth -Value (Get-LinearNestedValue -InputObject $InputObject -Name 'health')
             Author     = Get-LinearNestedValue -InputObject $InputObject -Name 'user.name'
             Body       = Get-LinearNestedValue -InputObject $InputObject -Name 'body'
             CreatedAt  = Get-LinearNestedValue -InputObject $InputObject -Name 'createdAt'
@@ -278,13 +276,129 @@ function ConvertTo-LinearProjectUpdate {
     }
 }
 
+function ConvertTo-LinearInitiative {
+    <#
+    .SYNOPSIS
+        Flattens an Initiative node (InitiativeFields fragment) into a PSLinear.Initiative object.
+    .NOTES
+        Projects and Labels hold names, with the ids in ProjectIds and LabelIds. Content and
+        SubInitiatives are only filled for a single initiative fetched with GetInitiative; they
+        are $null in lists.
+    #>
+    [CmdletBinding()]
+    [OutputType('PSLinear.Initiative')]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [AllowNull()]
+        [object] $InputObject
+    )
+
+    process {
+        if ($null -eq $InputObject) { return }
+        $node = $InputObject
+        # GetInitiative fetches up to 100 projects and labels under these aliases.
+        $projects = @(Get-LinearNestedValue -InputObject $node -Name 'allProjects.nodes')
+        if ($null -eq (Get-LinearNestedValue -InputObject $node -Name 'allProjects')) { $projects = @(Get-LinearNestedValue -InputObject $node -Name 'projects.nodes') }
+        $labels = @(Get-LinearNestedValue -InputObject $node -Name 'allLabels.nodes')
+        if ($null -eq (Get-LinearNestedValue -InputObject $node -Name 'allLabels')) { $labels = @(Get-LinearNestedValue -InputObject $node -Name 'labels.nodes') }
+        $projects = @($projects | Where-Object { $null -ne $_ })
+        $labels = @($labels | Where-Object { $null -ne $_ })
+        # Assigned directly rather than through an if expression, which would unroll the list.
+        $subInitiativeNames = $null
+        $subInitiatives = Get-LinearNestedValue -InputObject $node -Name 'subInitiatives'
+        if ($null -ne $subInitiatives) {
+            $subInitiativeNames = [string[]]@(Get-LinearNestedValue -InputObject $subInitiatives -Name 'nodes' | Where-Object { $null -ne $_ } | ForEach-Object { $_.name })
+        }
+        $priority = Get-LinearNestedValue -InputObject $node -Name 'priority'
+
+        [pscustomobject]@{
+            PSTypeName         = 'PSLinear.Initiative'
+            Id                 = $node.id
+            Name               = $node.name
+            Status             = Get-LinearNestedValue -InputObject $node -Name 'status'
+            Health             = ConvertFrom-LinearHealth -Value (Get-LinearNestedValue -InputObject $node -Name 'health')
+            Priority           = $priority
+            PriorityLabel      = if ($null -ne $priority -and $priority -ge 0 -and $priority -le 4) { @('No priority', 'Urgent', 'High', 'Medium', 'Low')[$priority] } else { $null }
+            Owner              = Get-LinearNestedValue -InputObject $node -Name 'owner.name'
+            LeadTeam           = Get-LinearNestedValue -InputObject $node -Name 'leadTeam.key'
+            Projects           = [string[]]@($projects | ForEach-Object { Get-LinearNestedValue -InputObject $_ -Name 'name' })
+            Labels             = [string[]]@($labels | ForEach-Object { Get-LinearNestedValue -InputObject $_ -Name 'name' })
+            TargetDate         = Get-LinearNestedValue -InputObject $node -Name 'targetDate'
+            StartedAt          = Get-LinearNestedValue -InputObject $node -Name 'startedAt'
+            CompletedAt        = Get-LinearNestedValue -InputObject $node -Name 'completedAt'
+            HealthUpdatedAt    = Get-LinearNestedValue -InputObject $node -Name 'healthUpdatedAt'
+            ParentInitiative   = Get-LinearNestedValue -InputObject $node -Name 'parentInitiative.name'
+            SubInitiatives     = $subInitiativeNames
+            Description        = Get-LinearNestedValue -InputObject $node -Name 'description'
+            Content            = Get-LinearNestedValue -InputObject $node -Name 'content'
+            Url                = Get-LinearNestedValue -InputObject $node -Name 'url'
+            ArchivedAt         = Get-LinearNestedValue -InputObject $node -Name 'archivedAt'
+            SlugId             = Get-LinearNestedValue -InputObject $node -Name 'slugId'
+            OwnerId            = Get-LinearNestedValue -InputObject $node -Name 'owner.id'
+            LeadTeamId         = Get-LinearNestedValue -InputObject $node -Name 'leadTeam.id'
+            ParentInitiativeId = Get-LinearNestedValue -InputObject $node -Name 'parentInitiative.id'
+            ProjectIds         = [string[]]@($projects | ForEach-Object { Get-LinearNestedValue -InputObject $_ -Name 'id' })
+            LabelIds           = [string[]]@($labels | ForEach-Object { Get-LinearNestedValue -InputObject $_ -Name 'id' })
+        }
+    }
+}
+
+function ConvertTo-LinearInitiativeUpdate {
+    <#
+    .SYNOPSIS
+        Flattens an InitiativeUpdate node into a PSLinear.InitiativeUpdate object. Health is OnTrack, AtRisk or OffTrack.
+    #>
+    [CmdletBinding()]
+    [OutputType('PSLinear.InitiativeUpdate')]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [AllowNull()]
+        [object] $InputObject
+    )
+
+    process {
+        if ($null -eq $InputObject) { return }
+        [pscustomobject]@{
+            PSTypeName   = 'PSLinear.InitiativeUpdate'
+            Id           = $InputObject.id
+            Initiative   = Get-LinearNestedValue -InputObject $InputObject -Name 'initiative.name'
+            Health       = ConvertFrom-LinearHealth -Value (Get-LinearNestedValue -InputObject $InputObject -Name 'health')
+            Author       = Get-LinearNestedValue -InputObject $InputObject -Name 'user.name'
+            Body         = Get-LinearNestedValue -InputObject $InputObject -Name 'body'
+            CreatedAt    = Get-LinearNestedValue -InputObject $InputObject -Name 'createdAt'
+            EditedAt     = Get-LinearNestedValue -InputObject $InputObject -Name 'editedAt'
+            Url          = Get-LinearNestedValue -InputObject $InputObject -Name 'url'
+            InitiativeId = Get-LinearNestedValue -InputObject $InputObject -Name 'initiative.id'
+            AuthorId     = Get-LinearNestedValue -InputObject $InputObject -Name 'user.id'
+        }
+    }
+}
+
+function ConvertFrom-LinearHealth {
+    <#
+    .SYNOPSIS
+        Turns an API health value (onTrack, atRisk, offTrack) into the PowerShell spelling
+        (OnTrack, AtRisk, OffTrack). Returns $null for no health.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string] $Value
+    )
+
+    if ([string]::IsNullOrEmpty($Value)) { return $null }
+    $Value.Substring(0, 1).ToUpperInvariant() + $Value.Substring(1)
+}
+
 function ConvertTo-LinearComment {
     <#
     .SYNOPSIS
         Flattens a Comment node (CommentFields fragment) into a PSLinear.Comment object.
     .NOTES
         Author is the user, or the integration (bot) or external user that wrote the comment.
-        Target names what the comment is on: an issue identifier or a project name. ThreadId is
+        Target names what the comment is on: an issue identifier, or a project or initiative name. ThreadId is
         the id of the first comment in the thread (the comment itself when it is not a reply).
     #>
     [CmdletBinding()]
@@ -305,29 +419,31 @@ function ConvertTo-LinearComment {
         ) | Where-Object { $_ } | Select-Object -First 1
         $target = @(
             (Get-LinearNestedValue -InputObject $node -Name 'issue.identifier'),
-            (Get-LinearNestedValue -InputObject $node -Name 'project.name')
+            (Get-LinearNestedValue -InputObject $node -Name 'project.name'),
+            (Get-LinearNestedValue -InputObject $node -Name 'initiative.name')
         ) | Where-Object { $_ } | Select-Object -First 1
         $parentId = Get-LinearNestedValue -InputObject $node -Name 'parentId'
 
         [pscustomobject]@{
-            PSTypeName = 'PSLinear.Comment'
-            Id         = $node.id
-            Target     = $target
-            Author     = $author
-            Body       = Get-LinearNestedValue -InputObject $node -Name 'body'
-            CreatedAt  = Get-LinearNestedValue -InputObject $node -Name 'createdAt'
-            EditedAt   = Get-LinearNestedValue -InputObject $node -Name 'editedAt'
-            IsReply    = -not [string]::IsNullOrEmpty($parentId)
-            ThreadId   = if ($parentId) { $parentId } else { $node.id }
-            Resolved   = $null -ne (Get-LinearNestedValue -InputObject $node -Name 'resolvedAt')
-            ResolvedAt = Get-LinearNestedValue -InputObject $node -Name 'resolvedAt'
-            ResolvedBy = Get-LinearNestedValue -InputObject $node -Name 'resolvingUser.name'
-            QuotedText = Get-LinearNestedValue -InputObject $node -Name 'quotedText'
-            Url        = Get-LinearNestedValue -InputObject $node -Name 'url'
-            ParentId   = $parentId
-            AuthorId   = Get-LinearNestedValue -InputObject $node -Name 'user.id'
-            IssueId    = Get-LinearNestedValue -InputObject $node -Name 'issue.id'
-            ProjectId  = Get-LinearNestedValue -InputObject $node -Name 'project.id'
+            PSTypeName   = 'PSLinear.Comment'
+            Id           = $node.id
+            Target       = $target
+            Author       = $author
+            Body         = Get-LinearNestedValue -InputObject $node -Name 'body'
+            CreatedAt    = Get-LinearNestedValue -InputObject $node -Name 'createdAt'
+            EditedAt     = Get-LinearNestedValue -InputObject $node -Name 'editedAt'
+            IsReply      = -not [string]::IsNullOrEmpty($parentId)
+            ThreadId     = if ($parentId) { $parentId } else { $node.id }
+            Resolved     = $null -ne (Get-LinearNestedValue -InputObject $node -Name 'resolvedAt')
+            ResolvedAt   = Get-LinearNestedValue -InputObject $node -Name 'resolvedAt'
+            ResolvedBy   = Get-LinearNestedValue -InputObject $node -Name 'resolvingUser.name'
+            QuotedText   = Get-LinearNestedValue -InputObject $node -Name 'quotedText'
+            Url          = Get-LinearNestedValue -InputObject $node -Name 'url'
+            ParentId     = $parentId
+            AuthorId     = Get-LinearNestedValue -InputObject $node -Name 'user.id'
+            IssueId      = Get-LinearNestedValue -InputObject $node -Name 'issue.id'
+            ProjectId    = Get-LinearNestedValue -InputObject $node -Name 'project.id'
+            InitiativeId = Get-LinearNestedValue -InputObject $node -Name 'initiative.id'
         }
     }
 }

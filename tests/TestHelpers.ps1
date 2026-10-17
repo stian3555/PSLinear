@@ -142,6 +142,10 @@ function Get-LinearTestLookupResponse {
     #           Completed, Canceled
     # Project labels: Customer, Infrastructure, group Theme with Growth, a second Growth (ENG),
     #           retired Old
+    # Initiatives: Q1 growth (Active, owner Ada, lead team ENG, project Website, label Strategic),
+    #           Platform reliability (Planned, project Mobile App), and the archived Old goals
+    #           (only with includeArchived)
+    # Initiative labels: Strategic, Bets, group Horizon with Now, retired Legacy
     # Cycles:   ENG 10 (past), 11 (previous), 12 (active), 13 (next, named 'Release sprint'); OPS 3 (active)
     # Milestones: Website has Alpha and Beta; Mobile App has none
     # Templates: issue templates 'Bug report' (workspace and ENG's own) and 'Incident' (OPS),
@@ -265,6 +269,24 @@ function Get-LinearTestLookupResponse {
                 @{ id = 'plabel-growth'; name = 'Growth'; isGroup = $false; retiredAt = $null; parent = $themeGroup; team = $null }
                 @{ id = 'plabel-eng-growth'; name = 'Growth'; isGroup = $false; retiredAt = $null; parent = $null; team = @{ id = 'team-eng'; key = 'ENG' } }
                 @{ id = 'plabel-old'; name = 'Old'; isGroup = $false; retiredAt = '2026-01-01T00:00:00.000Z'; parent = $null; team = $null }
+            )
+        }
+    }
+
+    if ($query -match 'query ListInitiatives') {
+        $initiatives = @((New-LinearTestInitiativeNode -Id 'initiative-growth'), (New-LinearTestInitiativeNode -Id 'initiative-reliability'))
+        if ($variables.includeArchived -eq $true) { $initiatives += New-LinearTestInitiativeNode -Id 'initiative-old' }
+        return New-LinearTestResponse -Data @{ initiatives = New-LinearTestConnection -Nodes $initiatives }
+    }
+
+    if ($query -match 'query ListInitiativeLabels') {
+        return New-LinearTestResponse -Data @{
+            initiativeLabels = New-LinearTestConnection -Nodes @(
+                @{ id = 'ilabel-strategic'; name = 'Strategic'; isGroup = $false; retiredAt = $null; parent = $null }
+                @{ id = 'ilabel-bets'; name = 'Bets'; isGroup = $false; retiredAt = $null; parent = $null }
+                @{ id = 'ilabel-horizon'; name = 'Horizon'; isGroup = $true; retiredAt = $null; parent = $null }
+                @{ id = 'ilabel-now'; name = 'Now'; isGroup = $false; retiredAt = $null; parent = @{ name = 'Horizon' } }
+                @{ id = 'ilabel-legacy'; name = 'Legacy'; isGroup = $false; retiredAt = '2026-01-01T00:00:00.000Z'; parent = $null }
             )
         }
     }
@@ -415,6 +437,7 @@ function New-LinearTestCommentNode {
         [string] $ParentId,
         [string] $Issue = 'ENG-1',
         [string] $ProjectId,
+        [string] $InitiativeId,
         [string] $CreatedAt = '2026-10-10T10:00:00.000Z',
         [string] $ResolvedAt
     )
@@ -432,8 +455,9 @@ function New-LinearTestCommentNode {
         botActor      = if ($Bot) { @{ name = $Bot; type = 'github' } } else { $null }
         externalUser  = $null
         resolvingUser = if ($ResolvedAt) { @{ id = 'user-ada'; name = 'Ada Lovelace' } } else { $null }
-        issue         = if ($ProjectId) { $null } else { @{ id = "issue-$Issue"; identifier = $Issue } }
+        issue         = if ($ProjectId -or $InitiativeId) { $null } else { @{ id = "issue-$Issue"; identifier = $Issue } }
         project       = if ($ProjectId) { @{ id = $ProjectId; name = 'Website' } } else { $null }
+        initiative    = if ($InitiativeId) { @{ id = $InitiativeId; name = 'Q1 growth' } } else { $null }
     }
 }
 
@@ -444,6 +468,7 @@ function Get-LinearTestCommentResponse {
     #          comment-4 (Ada, written after comment-1) and comment-2 (Grace, a reply to comment-1
     #          written after comment-4); returned out of order
     # Website: comment-p1 (Ada)
+    # Q1 growth (initiative-growth): comment-i1 (Ada)
     # ENG-404 and the comment id 'missing' do not exist. CreateComment rejects the body 'reject'.
     param([Parameter(Mandatory)][hashtable] $Request)
 
@@ -455,6 +480,7 @@ function Get-LinearTestCommentResponse {
         'comment-3'  = New-LinearTestCommentNode -Id 'comment-3' -Body 'Linked a pull request' -Bot 'GitHub' -CreatedAt '2026-10-09T09:00:00.000Z' -ResolvedAt '2026-10-09T12:00:00.000Z'
         'comment-4'  = New-LinearTestCommentNode -Id 'comment-4' -Body 'Another thread' -CreatedAt '2026-10-10T10:30:00.000Z'
         'comment-p1' = New-LinearTestCommentNode -Id 'comment-p1' -Body 'Project kickoff' -ProjectId 'project-web'
+        'comment-i1' = New-LinearTestCommentNode -Id 'comment-i1' -Body 'Initiative kickoff' -InitiativeId 'initiative-growth'
     }
     $notFound = New-LinearTestError -Message 'Entity not found: Comment' -Code 'INPUT_ERROR'
 
@@ -466,7 +492,13 @@ function Get-LinearTestCommentResponse {
         return New-LinearTestResponse -Data @{ issue = @{ comments = New-LinearTestConnection -Nodes $nodes } }
     }
     if ($query -match 'query ListComments') {
-        $nodes = if ($variables.filter.project.id.eq -eq 'project-web') { @($comments['comment-p1']) } else { @() }
+        $nodes = if ((Get-LinearNestedTestValue -InputObject $variables -Path 'filter.project.id.eq') -eq 'project-web') {
+            @($comments['comment-p1'])
+        }
+        elseif ((Get-LinearNestedTestValue -InputObject $variables -Path 'filter.initiative.id.eq') -eq 'initiative-growth') {
+            @($comments['comment-i1'])
+        }
+        else { @() }
         return New-LinearTestResponse -Data @{ comments = New-LinearTestConnection -Nodes $nodes }
     }
     if ($query -match 'query GetComment') {
@@ -479,7 +511,8 @@ function Get-LinearTestCommentResponse {
             return New-LinearTestResponse -Data @{ commentCreate = $null } -Errors @(New-LinearTestError -Message 'Argument Validation Error' -Code 'INPUT_ERROR')
         }
         $issueValue = if ($commentInput['issueId']) { $commentInput['issueId'] -replace '^issue-', '' } else { 'ENG-1' }
-        $node = New-LinearTestCommentNode -Id 'comment-new' -Body $commentInput['body'] -ParentId $commentInput['parentId'] -Issue $issueValue -ProjectId $commentInput['projectId']
+        $node = New-LinearTestCommentNode -Id 'comment-new' -Body $commentInput['body'] -ParentId $commentInput['parentId'] -Issue $issueValue `
+            -ProjectId $commentInput['projectId'] -InitiativeId $commentInput['initiativeId']
         return New-LinearTestResponse -Data @{ commentCreate = @{ success = $true; comment = $node } }
     }
     if ($query -match 'mutation UpdateComment') {
@@ -868,4 +901,201 @@ function Get-LinearNestedTestValue {
         $current = $current[$segment]
     }
     $current
+}
+
+function New-LinearTestInitiativeNode {
+    # Returns one of the fixture initiatives (initiative-growth, initiative-reliability,
+    # initiative-old) as Linear sends it. -Detail adds the fields of GetInitiative. -Change applies
+    # an InitiativeCreateInput or InitiativeUpdateInput hashtable to it.
+    param(
+        [Parameter(Mandatory)][string] $Id,
+        [switch] $Detail,
+        [System.Collections.IDictionary] $Change = @{}
+    )
+    $users = @{ 'user-ada' = @{ id = 'user-ada'; name = 'Ada Lovelace' }; 'user-grace' = @{ id = 'user-grace'; name = 'Grace Hopper' } }
+    $teams = @{ 'team-eng' = @{ id = 'team-eng'; key = 'ENG' }; 'team-ops' = @{ id = 'team-ops'; key = 'OPS' } }
+    $labels = @{
+        'ilabel-strategic' = @{ id = 'ilabel-strategic'; name = 'Strategic' }
+        'ilabel-bets'      = @{ id = 'ilabel-bets'; name = 'Bets' }
+        'ilabel-now'       = @{ id = 'ilabel-now'; name = 'Now' }
+    }
+    $projects = @{ 'project-web' = @{ id = 'project-web'; name = 'Website' }; 'project-mobile' = @{ id = 'project-mobile'; name = 'Mobile App' } }
+
+    $values = switch ($Id) {
+        'initiative-growth' {
+            @{ name = 'Q1 growth'; slugId = '5f2c9a1b7e3d'; status = 'Active'; health = 'onTrack'; priority = 2; ownerId = 'user-ada'; leadTeamId = 'team-eng'
+                labelIds = @('ilabel-strategic'); projectIds = @('project-web'); targetDate = '2027-03-31'; description = 'Grow signups'
+                content = "# Q1 growth`nPlan"; archivedAt = $null; subInitiatives = @('Growth: EMEA')
+            }
+        }
+        'initiative-reliability' {
+            @{ name = 'Platform reliability'; slugId = '7a8b9c0d1e2f'; status = 'Planned'; health = $null; priority = 0; ownerId = $null; leadTeamId = $null
+                labelIds = @(); projectIds = @('project-mobile'); targetDate = $null; description = ''; content = ''; archivedAt = $null; subInitiatives = @()
+            }
+        }
+        'initiative-old' {
+            @{ name = 'Old goals'; slugId = '0f0e0d0c0b0a'; status = 'Completed'; health = $null; priority = 0; ownerId = $null; leadTeamId = $null
+                labelIds = @(); projectIds = @(); targetDate = $null; description = ''; content = ''; archivedAt = '2026-01-01T00:00:00.000Z'; subInitiatives = @()
+            }
+        }
+        default {
+            @{ name = 'New initiative'; slugId = 'abcdef123456'; status = 'Planned'; health = $null; priority = 0; ownerId = $null; leadTeamId = $null
+                labelIds = @(); projectIds = @(); targetDate = $null; description = ''; content = ''; archivedAt = $null; subInitiatives = @()
+            }
+        }
+    }
+    foreach ($key in $Change.Keys) { $values[$key] = $Change[$key] }
+
+    $slug = ($values.name.ToLowerInvariant() -replace '[^a-z0-9]+', '-').Trim('-')
+    $labelNodes = @(foreach ($labelId in $values.labelIds) { $labels[$labelId] })
+    $projectNodes = @(foreach ($projectId in $values.projectIds) { $projects[$projectId] })
+    $node = [ordered]@{
+        id               = $Id
+        name             = $values.name
+        slugId           = $values.slugId
+        url              = "https://linear.app/acme/initiative/$slug-$($values.slugId)"
+        description      = $values.description
+        status           = $values.status
+        health           = $values.health
+        healthUpdatedAt  = if ($values.health) { '2026-10-08T09:00:00.000Z' } else { $null }
+        priority         = $values.priority
+        targetDate       = $values.targetDate
+        startedAt        = $null
+        completedAt      = $null
+        archivedAt       = $values.archivedAt
+        owner            = if ($values.ownerId) { $users[$values.ownerId] } else { $null }
+        leadTeam         = if ($values.leadTeamId) { $teams[$values.leadTeamId] } else { $null }
+        parentInitiative = $null
+        labels           = @{ nodes = $labelNodes }
+        projects         = @{ nodes = $projectNodes }
+    }
+    if ($Detail) {
+        $node['content'] = $values.content
+        $node['allLabels'] = @{ nodes = $labelNodes }
+        $node['allProjects'] = @{ nodes = $projectNodes }
+        $node['subInitiatives'] = @{ nodes = @(foreach ($sub in $values.subInitiatives) { @{ id = 'initiative-sub'; name = $sub } }) }
+    }
+    $node
+}
+
+function New-LinearTestInitiativeUpdateNode {
+    param(
+        [string] $Id = 'iupdate-1',
+        [string] $Body = 'All good',
+        [string] $Health = 'onTrack',
+        [string] $InitiativeId = 'initiative-growth',
+        [string] $CreatedAt = '2026-10-01T09:00:00.000Z'
+    )
+    [ordered]@{
+        id         = $Id
+        body       = $Body
+        health     = $Health
+        url        = "https://linear.app/acme/initiative/q1-growth-5f2c9a1b7e3d/updates#$Id"
+        createdAt  = $CreatedAt
+        editedAt   = $null
+        user       = @{ id = 'user-ada'; name = 'Ada Lovelace' }
+        initiative = @{ id = $InitiativeId; name = $(if ($InitiativeId -eq 'initiative-reliability') { 'Platform reliability' } else { 'Q1 growth' }) }
+    }
+}
+
+function Get-LinearTestInitiativeResponse {
+    # Serves the initiative, initiative-to-project and initiative update operations, or returns
+    # $null for any other request.
+    #
+    # GetInitiative: the three fixture initiatives, by id or slug id; anything else does not exist.
+    # Create/Update: the name 'reject' is rejected; unknown ids fail.
+    # Links:         Website is in Q1 growth (link-web-growth), Mobile App in Platform
+    #                reliability (link-mobile-reliability). Adding a project with an all-zero id
+    #                fails.
+    # Updates:       Q1 growth has iupdate-2 (AtRisk, newest) and iupdate-1 (OnTrack); Platform
+    #                reliability has iupdate-r1. The update id 'missing' does not exist.
+    param([Parameter(Mandatory)][hashtable] $Request)
+
+    $query = $Request.query
+    $variables = if ($Request.ContainsKey('variables')) { $Request.variables } else { @{} }
+    $slugs = @{ '5f2c9a1b7e3d' = 'initiative-growth'; '7a8b9c0d1e2f' = 'initiative-reliability'; '0f0e0d0c0b0a' = 'initiative-old' }
+    $known = @('initiative-growth', 'initiative-reliability', 'initiative-old')
+    $links = @{
+        'project-web'    = @(@{ id = 'link-web-growth'; initiative = @{ id = 'initiative-growth' } })
+        'project-mobile' = @(@{ id = 'link-mobile-reliability'; initiative = @{ id = 'initiative-reliability' } })
+    }
+    $updates = [ordered]@{
+        'iupdate-2'  = New-LinearTestInitiativeUpdateNode -Id 'iupdate-2' -Body "Slipping`nHiring delayed" -Health 'atRisk' -CreatedAt '2026-10-08T09:00:00.000Z'
+        'iupdate-1'  = New-LinearTestInitiativeUpdateNode -Id 'iupdate-1' -Body 'All good' -Health 'onTrack' -CreatedAt '2026-10-01T09:00:00.000Z'
+        'iupdate-r1' = New-LinearTestInitiativeUpdateNode -Id 'iupdate-r1' -Body 'Kickoff' -Health 'onTrack' -InitiativeId 'initiative-reliability' -CreatedAt '2026-09-20T09:00:00.000Z'
+    }
+    $rejected = New-LinearTestError -Message 'Argument Validation Error' -Code 'INPUT_ERROR'
+
+    if ($query -match 'query GetInitiative\b') {
+        $initiativeId = if ($slugs.ContainsKey($variables.id)) { $slugs[$variables.id] } else { $variables.id }
+        if ($initiativeId -notin $known) {
+            return New-LinearTestResponse -Data $null -Errors @(New-LinearTestError -Message 'Entity not found: Initiative' -Code 'INPUT_ERROR' -Path 'initiative')
+        }
+        return New-LinearTestResponse -Data @{ initiative = New-LinearTestInitiativeNode -Id $initiativeId -Detail }
+    }
+    if ($query -match 'mutation CreateInitiative\b') {
+        $initiativeInput = $variables.input
+        if ($initiativeInput['name'] -eq 'reject') { return New-LinearTestResponse -Data @{ initiativeCreate = $null } -Errors @($rejected) }
+        return New-LinearTestResponse -Data @{ initiativeCreate = @{ success = $true; initiative = New-LinearTestInitiativeNode -Id 'initiative-new' -Change $initiativeInput } }
+    }
+    if ($query -match 'mutation UpdateInitiative\b') {
+        $initiativeInput = $variables.input
+        if ($variables.id -notin $known -or $initiativeInput['name'] -eq 'reject') {
+            return New-LinearTestResponse -Data @{ initiativeUpdate = $null } -Errors @($rejected)
+        }
+        return New-LinearTestResponse -Data @{ initiativeUpdate = @{ success = $true; initiative = New-LinearTestInitiativeNode -Id $variables.id -Change $initiativeInput } }
+    }
+    if ($query -match 'mutation (Delete|Archive)Initiative\b') {
+        $field = if ($query -match 'mutation DeleteInitiative') { 'initiativeDelete' } else { 'initiativeArchive' }
+        if ($variables.id -notin $known) { return New-LinearTestResponse -Data @{ $field = $null } -Errors @($rejected) }
+        return New-LinearTestResponse -Data @{ $field = @{ success = $true } }
+    }
+
+    if ($query -match 'query ListProjectInitiativeLinks') {
+        if (-not $links.ContainsKey($variables.id)) {
+            return New-LinearTestResponse -Data $null -Errors @(New-LinearTestError -Message 'Entity not found: Project' -Code 'INPUT_ERROR' -Path 'project')
+        }
+        return New-LinearTestResponse -Data @{ project = @{ initiativeToProjects = @{ nodes = $links[$variables.id] } } }
+    }
+    if ($query -match 'mutation CreateInitiativeToProject') {
+        if ($variables.input.projectId -eq '00000000-0000-4000-8000-000000000000') {
+            return New-LinearTestResponse -Data @{ initiativeToProjectCreate = $null } -Errors @($rejected)
+        }
+        return New-LinearTestResponse -Data @{ initiativeToProjectCreate = @{ success = $true } }
+    }
+    if ($query -match 'mutation DeleteInitiativeToProject') {
+        if ($variables.id -notlike 'link-*') { return New-LinearTestResponse -Data @{ initiativeToProjectDelete = $null } -Errors @($rejected) }
+        return New-LinearTestResponse -Data @{ initiativeToProjectDelete = @{ success = $true; entityId = $variables.id } }
+    }
+
+    if ($query -match 'query ListInitiativeUpdates') {
+        $initiativeId = Get-LinearNestedTestValue -InputObject $variables -Path 'filter.initiative.id.eq'
+        $nodes = @($updates.Values | Where-Object { -not $initiativeId -or $_.initiative.id -eq $initiativeId })
+        return New-LinearTestResponse -Data @{ initiativeUpdates = New-LinearTestConnection -Nodes $nodes }
+    }
+    if ($query -match 'query GetInitiativeUpdate') {
+        if (-not $updates.Contains($variables.id)) {
+            return New-LinearTestResponse -Data $null -Errors @(New-LinearTestError -Message 'Entity not found: InitiativeUpdate' -Code 'INPUT_ERROR')
+        }
+        return New-LinearTestResponse -Data @{ initiativeUpdate = $updates[$variables.id] }
+    }
+    if ($query -match 'mutation CreateInitiativeUpdate') {
+        $updateInput = $variables.input
+        if ($updateInput['body'] -eq 'reject') { return New-LinearTestResponse -Data @{ initiativeUpdateCreate = $null } -Errors @($rejected) }
+        $health = if ($updateInput.Contains('health')) { $updateInput['health'] } else { 'onTrack' }
+        $node = New-LinearTestInitiativeUpdateNode -Id 'iupdate-new' -Body $updateInput['body'] -Health $health -InitiativeId $updateInput['initiativeId'] -CreatedAt '2026-10-17T09:00:00.000Z'
+        return New-LinearTestResponse -Data @{ initiativeUpdateCreate = @{ success = $true; initiativeUpdate = $node } }
+    }
+    if ($query -match 'mutation UpdateInitiativeUpdate') {
+        if (-not $updates.Contains($variables.id)) { return New-LinearTestResponse -Data @{ initiativeUpdateUpdate = $null } -Errors @($rejected) }
+        $node = $updates[$variables.id]
+        foreach ($key in $variables.input.Keys) { $node[$key] = $variables.input[$key] }
+        $node['editedAt'] = '2026-10-17T10:00:00.000Z'
+        return New-LinearTestResponse -Data @{ initiativeUpdateUpdate = @{ success = $true; initiativeUpdate = $node } }
+    }
+    if ($query -match 'mutation ArchiveInitiativeUpdate') {
+        if (-not $updates.Contains($variables.id)) { return New-LinearTestResponse -Data @{ initiativeUpdateArchive = $null } -Errors @($rejected) }
+        return New-LinearTestResponse -Data @{ initiativeUpdateArchive = @{ success = $true } }
+    }
+    $null
 }

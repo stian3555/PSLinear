@@ -1,0 +1,11 @@
+query ListInitiativeUpdates($filter: InitiativeUpdateFilter, $first: Int, $after: String) {
+  initiativeUpdates(filter: $filter, first: $first, after: $after) {
+    nodes {
+      ...InitiativeUpdateFields
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

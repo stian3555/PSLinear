@@ -141,6 +141,11 @@ New-LinearProjectUpdate -Project 'Checkout v2' 'Design approved; build starts Mo
 # Projects in progress whose latest update is not on track
 Get-LinearProject -Status started | Get-LinearProjectUpdate -First 1 | Where-Object Health -NE 'OnTrack'
 
+# Group projects in an initiative and post its status
+New-LinearInitiative 'Q1 growth' -Owner me -Status Active -TargetDate 2027-03-31 |
+    Set-LinearInitiative -AddProject 'Checkout v2', Website
+New-LinearInitiativeUpdate -Initiative 'Q1 growth' 'Checkout v2 is on track; Website slipped a week.' -Health AtRisk
+
 # Remove the due date and take the issue out of its cycle
 Set-LinearIssue ENG-412 -Clear DueDate, Cycle
 
@@ -194,6 +199,14 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { 
 | `New-LinearProjectUpdate` | Post a project status update with a health (OnTrack, AtRisk, OffTrack). |
 | `Set-LinearProjectUpdate` | Edit a status update's text or health. |
 | `Remove-LinearProjectUpdate` | Remove status updates. |
+| `Get-LinearInitiative` | Initiatives with status, health, owner, projects and labels; `-Id` for the full initiative with content and sub-initiatives. |
+| `New-LinearInitiative` | Create an initiative, with owner, lead team and labels given by name. |
+| `Set-LinearInitiative` | Change initiatives (status, owner, dates, labels) and add or remove their projects. |
+| `Remove-LinearInitiative` | Move initiatives to the trash, or archive them with `-Archive`. |
+| `Get-LinearInitiativeUpdate` | Status updates of an initiative, or of every initiative, newest first. |
+| `New-LinearInitiativeUpdate` | Post an initiative status update with a health. |
+| `Set-LinearInitiativeUpdate` | Edit an initiative status update's text or health. |
+| `Remove-LinearInitiativeUpdate` | Remove initiative status updates. |
 | `Get-LinearCycle` | Cycles per team, with `-Active`, `-Next`, `-Previous` and `-Number`. |
 | `Get-LinearTemplate` | Issue, project and document templates, optionally those a team can use. |
 | `Get-LinearMilestone` | Milestones of a project, or of every project, with status, target date and progress. |
@@ -204,8 +217,8 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { 
 | `New-LinearIssue` | Create an issue, with states, labels, projects, milestones, cycles, users and templates given by name. |
 | `Set-LinearIssue` | Change issues: state, assignee, labels (replace, add or remove), priority and more, or clear values with `-Clear`. |
 | `Remove-LinearIssue` | Move issues to the trash, or archive them with `-Archive`. |
-| `Get-LinearComment` | Comments on an issue or project, thread by thread. |
-| `Add-LinearComment` | Comment on an issue or project, or reply to a comment. |
+| `Get-LinearComment` | Comments on an issue, project or initiative, thread by thread. |
+| `Add-LinearComment` | Comment on an issue, project or initiative, or reply to a comment. |
 | `Set-LinearComment` | Edit a comment, or resolve or reopen its thread. |
 | `Remove-LinearComment` | Delete comments. |
 | `Get-LinearAttachment` | Attachments of issues: uploaded files, links and integration links. |
@@ -229,8 +242,9 @@ Run `Get-Help <command> -Full` for parameters and more examples.
   `Connect-Linear -MaxRetries`). `Get-LinearRateLimit` shows the remaining budget.
 - **Complexity.** Linear rejects any single query above 10,000 complexity points. Pages are
   capped at 100 issues so a page stays well below that limit.
-- **Name lookups.** Team, workflow state, label, user, project, project status and project
-  label names are resolved to ids with cached queries (10 minutes; states and labels per team). `Connect-Linear` and
+- **Name lookups.** Team, workflow state, label, user, project, project status, project label,
+  initiative and initiative label names are resolved to ids with cached queries (10 minutes;
+  states and labels per team). `Connect-Linear` and
   `Disconnect-Linear` clear the caches, and a name that is not found triggers one refresh.
 - **Errors.** GraphQL errors are turned into PowerShell errors with the Linear error code in
   the message. A missing issue in `Get-LinearIssue`, `Set-LinearIssue` or
@@ -282,7 +296,6 @@ publish. A mistake means a new version, not a re-tag.
 
 ## Roadmap
 
-- Initiatives and initiative updates
 - Documents
 - Creating and removing labels and teams
 - Git integration: start an issue on a new branch, and find the issue for the current branch

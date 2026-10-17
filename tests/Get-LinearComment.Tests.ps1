@@ -66,6 +66,30 @@ Describe 'Get-LinearComment' {
         }
     }
 
+    Context 'Initiative comments' {
+        It 'resolves the initiative by name and filters comments by its id' {
+            $comment = Get-LinearComment -Initiative 'Q1 growth'
+            $comment.Id | Should -Be 'comment-i1'
+            $comment.Target | Should -Be 'Q1 growth'
+            $comment.InitiativeId | Should -Be 'initiative-growth'
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                (Get-RequestOperation $Body) -eq 'ListComments' -and
+                (Get-RequestVariable $Body 'filter.initiative.id.eq') -eq 'initiative-growth' -and
+                $null -eq (Get-RequestVariable $Body 'filter.project')
+            }
+        }
+
+        It 'takes initiative objects from the pipeline' {
+            $initiative = [pscustomobject]@{ PSTypeName = 'PSLinear.Initiative'; Id = 'initiative-growth'; Name = 'Q1 growth' }
+            ($initiative | Get-LinearComment).Id | Should -Be 'comment-i1'
+        }
+
+        It 'stops on an unknown initiative and lists the valid ones' {
+            { Get-LinearComment -Initiative Moonshot } |
+                Should -Throw -ErrorId 'PSLinear.InitiativeNotFound*' -ExpectedMessage '*Platform reliability, Q1 growth*'
+        }
+    }
+
     Context 'Project comments' {
         It 'resolves the project by name and filters comments by its id' {
             (Get-LinearComment -Project Website).Id | Should -Be 'comment-p1'

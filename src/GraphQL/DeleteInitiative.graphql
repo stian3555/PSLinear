@@ -1,0 +1,5 @@
+mutation DeleteInitiative($id: String!) {
+  initiativeDelete(id: $id) {
+    success
+  }
+}

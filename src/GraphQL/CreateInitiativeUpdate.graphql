@@ -1,0 +1,8 @@
+mutation CreateInitiativeUpdate($input: InitiativeUpdateCreateInput!) {
+  initiativeUpdateCreate(input: $input) {
+    success
+    initiativeUpdate {
+      ...InitiativeUpdateFields
+    }
+  }
+}

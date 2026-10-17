@@ -1,16 +1,17 @@
 function Get-LinearComment {
     <#
     .SYNOPSIS
-        Gets the comments on a Linear issue or project.
+        Gets the comments on a Linear issue, project or initiative.
 
     .DESCRIPTION
-        Returns every comment on an issue or a project, thread by thread: threads are ordered by
+        Returns every comment on an issue, a project or an initiative, thread by thread: threads are ordered by
         their first comment, oldest first, and each thread's replies follow its first comment. A
         reply has IsReply set, and ParentId and ThreadId point at the first comment of its
         thread; a resolved thread has Resolved set on that first comment.
 
-        Give an issue by identifier (ENG-123), UUID or URL, a project by name, slug id, URL or
-        id, or pipe in issues and projects. Use -Id to get specific comments.
+        Give an issue by identifier (ENG-123), UUID or URL, a project or initiative by name,
+        slug id, URL or id, or pipe in issues, projects and initiatives. Use -Id to get specific
+        comments.
 
         A missing issue or comment writes a non-terminating error and the remaining input is
         still processed.
@@ -21,9 +22,12 @@ function Get-LinearComment {
     .PARAMETER Project
         A project name, slug id (the hex suffix of its URL), URL or id.
 
+    .PARAMETER Initiative
+        An initiative name, slug id (the hex suffix of its URL), URL or id.
+
     .PARAMETER InputObject
-        PSLinear.Issue or PSLinear.Project objects, typically from Get-LinearIssue or
-        Get-LinearProject.
+        PSLinear.Issue, PSLinear.Project or PSLinear.Initiative objects, typically from
+        Get-LinearIssue, Get-LinearProject or Get-LinearInitiative.
 
     .PARAMETER Id
         One or more comment ids.
@@ -48,10 +52,16 @@ function Get-LinearComment {
 
         Shows the full text of a project's comments.
 
+    .EXAMPLE
+        Get-LinearInitiative 'Q1 growth' | Get-LinearComment
+
+        Lists the comments on an initiative.
+
     .INPUTS
         System.String
         PSLinear.Issue
         PSLinear.Project
+        PSLinear.Initiative
 
     .OUTPUTS
         PSLinear.Comment
@@ -75,6 +85,10 @@ function Get-LinearComment {
         [Parameter(Mandatory, ParameterSetName = 'Project')]
         [ValidateNotNullOrEmpty()]
         [string] $Project,
+
+        [Parameter(Mandatory, ParameterSetName = 'Initiative')]
+        [ValidateNotNullOrEmpty()]
+        [string] $Initiative,
 
         [Parameter(Mandatory, ValueFromPipeline, ParameterSetName = 'ByObject')]
         [object[]] $InputObject,
@@ -102,6 +116,7 @@ function Get-LinearComment {
             $targets = switch ($PSCmdlet.ParameterSetName) {
                 'Issue' { foreach ($value in $Issue) { Get-LinearCommentTarget -Issue $value } }
                 'Project' { Get-LinearCommentTarget -Project $Project -Resolve }
+                'Initiative' { Get-LinearCommentTarget -Initiative $Initiative -Resolve }
                 'ByObject' { foreach ($object in $InputObject) { Get-LinearCommentTarget -InputObject $object } }
             }
         }

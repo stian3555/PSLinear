@@ -24,6 +24,10 @@ $script:LinearProjectStatusCache = $null
 $script:LinearProjectStatusCacheExpires = [datetime]::MinValue
 $script:LinearProjectLabelCache = $null
 $script:LinearProjectLabelCacheExpires = [datetime]::MinValue
+$script:LinearInitiativeCache = $null
+$script:LinearInitiativeCacheExpires = [datetime]::MinValue
+$script:LinearInitiativeLabelCache = $null
+$script:LinearInitiativeLabelCacheExpires = [datetime]::MinValue
 $script:LinearDocumentCache = @{}
 
 $script:ModuleVersion = $ExecutionContext.SessionState.Module.Version
@@ -57,6 +61,7 @@ $script:ProjectStatusTypeOrder = @{
 }
 
 # Health values of project and initiative updates, as the API spells them.
+# Initiative statuses are a fixed list: Proposed, Planned, Active, Completed, Canceled.
 $script:HealthMap = @{
     OnTrack  = 'onTrack'
     AtRisk   = 'atRisk'
@@ -122,3 +127,4 @@ Register-ArgumentCompleter -CommandName $teamCommands -ParameterName 'Team' -Scr
 foreach ($parameterName in 'AddTeam', 'RemoveTeam') {
     Register-ArgumentCompleter -CommandName 'Set-LinearProject' -ParameterName $parameterName -ScriptBlock $teamCompleter
 }
+Register-ArgumentCompleter -CommandName 'New-LinearInitiative', 'Set-LinearInitiative' -ParameterName 'LeadTeam' -ScriptBlock $teamCompleter

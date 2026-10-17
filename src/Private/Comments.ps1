@@ -1,16 +1,18 @@
 function Get-LinearCommentTarget {
     <#
     .SYNOPSIS
-        Works out what a comment command acts on: an issue or a project.
+        Works out what a comment command acts on: an issue, a project or an initiative.
     .DESCRIPTION
-        Returns [pscustomobject]@{ Kind; Id; Name }. Kind is Issue or Project, Id is what the API
-        accepts (an issue identifier or UUID, a project UUID) and Name is for messages.
+        Returns [pscustomobject]@{ Kind; Id; Name }. Kind is Issue, Project or Initiative, Id is
+        what the API accepts (an issue identifier or UUID, a project or initiative UUID) and Name
+        is for messages.
 
-        Without -Resolve no request is sent, so it is safe before ShouldProcess; a project given
-        by name then has no Id yet. With -Resolve, project names, slug ids and URLs are resolved.
+        Without -Resolve no request is sent, so it is safe before ShouldProcess; a project or
+        initiative given by name then has no Id yet. With -Resolve, names, slug ids and URLs are
+        resolved.
     .NOTES
-        Throws an ErrorRecord (PSLinear.InvalidArgument, or the project resolver's errors) that
-        callers rethrow with $PSCmdlet.ThrowTerminatingError.
+        Throws an ErrorRecord (PSLinear.InvalidArgument, or the project and initiative resolvers'
+        errors) that callers rethrow with $PSCmdlet.ThrowTerminatingError.
     #>
     [CmdletBinding()]
     [OutputType([pscustomobject])]
@@ -18,6 +20,8 @@ function Get-LinearCommentTarget {
         [string] $Issue,
 
         [string] $Project,
+
+        [string] $Initiative,
 
         [AllowNull()]
         [object] $InputObject,
@@ -35,6 +39,11 @@ function Get-LinearCommentTarget {
         return [pscustomobject]@{ Kind = 'Project'; Id = $projectId; Name = "project '$Project'" }
     }
 
+    if ($Initiative) {
+        $initiativeId = if ($Resolve) { Resolve-LinearInitiativeId -Initiative $Initiative } else { $null }
+        return [pscustomobject]@{ Kind = 'Initiative'; Id = $initiativeId; Name = "initiative '$Initiative'" }
+    }
+
     if ($null -ne $InputObject) {
         $typeNames = @($InputObject.PSObject.TypeNames)
         $objectId = Get-LinearNestedValue -InputObject $InputObject -Name 'Id'
@@ -46,16 +55,21 @@ function Get-LinearCommentTarget {
             $name = Get-LinearNestedValue -InputObject $InputObject -Name 'Name'
             return [pscustomobject]@{ Kind = 'Project'; Id = $objectId; Name = "project '$(if ($name) { $name } else { $objectId })'" }
         }
+        if ($typeNames -contains 'PSLinear.Initiative') {
+            $name = Get-LinearNestedValue -InputObject $InputObject -Name 'Name'
+            return [pscustomobject]@{ Kind = 'Initiative'; Id = $objectId; Name = "initiative '$(if ($name) { $name } else { $objectId })'" }
+        }
     }
 
-    throw (New-LinearErrorRecord -Message 'Comments belong to an issue or a project. Use -Issue or -Project, or pipe in PSLinear.Issue or PSLinear.Project objects.' `
+    throw (New-LinearErrorRecord -Message ('Comments belong to an issue, a project or an initiative. Use -Issue, -Project or -Initiative, ' +
+            'or pipe in PSLinear.Issue, PSLinear.Project or PSLinear.Initiative objects.') `
             -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument -TargetObject $InputObject)
 }
 
 function Get-LinearCommentList {
     <#
     .SYNOPSIS
-        Fetches every comment on an issue or project, thread by thread.
+        Fetches every comment on an issue, project or initiative, thread by thread.
     .DESCRIPTION
         Returns [pscustomobject]@{ Comments; Errors }. Threads are ordered by their first comment,
         oldest first, and each thread's replies follow its first comment in the order they were
@@ -74,7 +88,8 @@ function Get-LinearCommentList {
             -Variables @{ id = $Target.Id } -Limit 0 -IncludeErrors
     }
     else {
-        $filter = @{ project = @{ id = @{ eq = $Target.Id } } }
+        $field = if ($Target.Kind -eq 'Initiative') { 'initiative' } else { 'project' }
+        $filter = @{ $field = @{ id = @{ eq = $Target.Id } } }
         Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListComments') -ConnectionPath 'comments' `
             -Variables @{ filter = $filter } -Limit 0 -IncludeErrors
     }

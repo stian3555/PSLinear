@@ -1,0 +1,11 @@
+query ListInitiatives($first: Int, $after: String, $includeArchived: Boolean) {
+  initiatives(first: $first, after: $after, includeArchived: $includeArchived) {
+    nodes {
+      ...InitiativeFields
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

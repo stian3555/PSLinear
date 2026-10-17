@@ -1,0 +1,5 @@
+mutation ArchiveInitiative($id: String!) {
+  initiativeArchive(id: $id) {
+    success
+  }
+}

@@ -1,0 +1,5 @@
+query GetInitiativeUpdate($id: String!) {
+  initiativeUpdate(id: $id) {
+    ...InitiativeUpdateFields
+  }
+}
