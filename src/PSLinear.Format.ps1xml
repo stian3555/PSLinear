@@ -485,6 +485,56 @@
       </TableControl>
     </View>
     <View>
+      <Name>PSLinear.IssueRelation</Name>
+      <ViewSelectedBy>
+        <TypeName>PSLinear.IssueRelation</TypeName>
+      </ViewSelectedBy>
+      <TableControl>
+        <TableHeaders>
+          <TableColumnHeader>
+            <Label>Issue</Label>
+            <Width>10</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Type</Label>
+            <Width>12</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>RelatedIssue</Label>
+            <Width>12</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>RelatedState</Label>
+            <Width>14</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>RelatedTitle</Label>
+          </TableColumnHeader>
+        </TableHeaders>
+        <TableRowEntries>
+          <TableRowEntry>
+            <TableColumnItems>
+              <TableColumnItem>
+                <PropertyName>Issue</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <PropertyName>Type</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <PropertyName>RelatedIssue</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <PropertyName>RelatedState</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <PropertyName>RelatedTitle</PropertyName>
+              </TableColumnItem>
+            </TableColumnItems>
+          </TableRowEntry>
+        </TableRowEntries>
+      </TableControl>
+    </View>
+    <View>
       <Name>PSLinear.Context</Name>
       <ViewSelectedBy>
         <TypeName>PSLinear.Context</TypeName>

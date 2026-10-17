@@ -284,6 +284,53 @@ function ConvertTo-LinearAttachment {
     }
 }
 
+function ConvertTo-LinearIssueRelation {
+    <#
+    .SYNOPSIS
+        Flattens an IssueRelation node into a PSLinear.IssueRelation object, seen from one of its issues.
+    .DESCRIPTION
+        Linear stores a relation from 'issue' to 'relatedIssue'. Without -Inverse the object is
+        seen from 'issue'; with -Inverse it is seen from 'relatedIssue', so the type reads the
+        other way: blocks becomes BlockedBy and duplicate becomes DuplicatedBy.
+    #>
+    [CmdletBinding()]
+    [OutputType('PSLinear.IssueRelation')]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [AllowNull()]
+        [object] $InputObject,
+
+        [switch] $Inverse
+    )
+
+    process {
+        if ($null -eq $InputObject) { return }
+        $apiType = [string]$InputObject.type
+        $ownPath, $otherPath = if ($Inverse) { 'relatedIssue', 'issue' } else { 'issue', 'relatedIssue' }
+        $type = switch ($apiType) {
+            'blocks' { if ($Inverse) { 'BlockedBy' } else { 'Blocks' } }
+            'duplicate' { if ($Inverse) { 'DuplicatedBy' } else { 'DuplicateOf' } }
+            'related' { 'Related' }
+            'similar' { 'Similar' }
+            default { $apiType }
+        }
+
+        [pscustomobject]@{
+            PSTypeName     = 'PSLinear.IssueRelation'
+            Id             = $InputObject.id
+            Issue          = Get-LinearNestedValue -InputObject $InputObject -Name "$ownPath.identifier"
+            Type           = $type
+            RelatedIssue   = Get-LinearNestedValue -InputObject $InputObject -Name "$otherPath.identifier"
+            RelatedTitle   = Get-LinearNestedValue -InputObject $InputObject -Name "$otherPath.title"
+            RelatedState   = Get-LinearNestedValue -InputObject $InputObject -Name "$otherPath.state.name"
+            CreatedAt      = Get-LinearNestedValue -InputObject $InputObject -Name 'createdAt'
+            ApiType        = $apiType
+            IssueId        = Get-LinearNestedValue -InputObject $InputObject -Name "$ownPath.id"
+            RelatedIssueId = Get-LinearNestedValue -InputObject $InputObject -Name "$otherPath.id"
+        }
+    }
+}
+
 function ConvertTo-LinearCycle {
     <#
     .SYNOPSIS
