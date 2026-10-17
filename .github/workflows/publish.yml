@@ -6,8 +6,8 @@ name: Publish
 # One-time setup:
 #   1. Create an API key at https://www.powershellgallery.com/account/apikeys
 #      (scope: Push new packages and package versions, glob: PSLinear).
-#   2. In the GitHub repository: Settings > Environments > New environment "psgallery".
-#      Add the secret PSGALLERY_API_KEY there, and optionally require a reviewer.
+#   2. In the GitHub repository: Settings > Environments > "psgallery", add the secret
+#      PSGALLERY_API_KEY. The environment only accepts deployments from v* tags.
 
 on:
   release:
@@ -21,7 +21,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: psgallery
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
 
       - name: Check that the release tag matches the manifest
         shell: pwsh
