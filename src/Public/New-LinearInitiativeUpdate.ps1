@@ -6,7 +6,8 @@ function New-LinearInitiativeUpdate {
     .DESCRIPTION
         Posts an initiative update with a health (OnTrack, AtRisk or OffTrack) and a Markdown
         body, and returns it. The initiative's health in Linear follows its latest update. Give
-        -Body, -Health or both; without -Body, the update has no text. With -WhatIf nothing is
+        -Body, -Health or both: without -Health, Linear records the update as OnTrack; without
+        -Body, the update has no text. With -WhatIf nothing is
         sent, not even the initiative lookup.
 
     .PARAMETER Initiative
@@ -76,7 +77,7 @@ function New-LinearInitiativeUpdate {
             $PSCmdlet.ThrowTerminatingError($_)
         }
 
-        # Linear rejects a project update without a body; initiative updates are sent the same way.
+        # Linear rejects an update without a body, but accepts an empty one.
         $updateInput = @{ initiativeId = $initiativeId; body = $(if ($Body) { $Body } else { '' }) }
         if ($Health) { $updateInput['health'] = $script:HealthMap[$Health] }
 
