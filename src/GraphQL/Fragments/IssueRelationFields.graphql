@@ -1,0 +1,21 @@
+fragment IssueRelationFields on IssueRelation {
+  id
+  type
+  createdAt
+  issue {
+    id
+    identifier
+    title
+    state {
+      name
+    }
+  }
+  relatedIssue {
+    id
+    identifier
+    title
+    state {
+      name
+    }
+  }
+}

@@ -19,6 +19,10 @@ and this project follows [Semantic Versioning](https://semver.org/).
   anything is uploaded.
 - `Add-LinearComment -Attachment` uploads files and adds them to the comment: images are shown
   in the comment, other files linked. `-Body` is optional when files are attached.
+- `Get-LinearIssueRelation`, `Add-LinearIssueRelation` and `Remove-LinearIssueRelation`: list an
+  issue's relations in both directions, seen from the issue (Blocks, BlockedBy, Related,
+  DuplicateOf, DuplicatedBy, Similar), relate issues, and remove relations by id, by object or
+  between two issues.
 - `-Project` parameters also accept a project's slug id and URL.
 
 ## [0.1.0] - 2026-10-17

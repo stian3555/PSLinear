@@ -149,6 +149,10 @@ Add-LinearAttachment ENG-412 ./logs/*.log -Comment 'Logs from the failed run.'
 Add-LinearAttachment ENG-412 -Url https://github.com/acme/app/pull/42
 Add-LinearComment ENG-412 'After the fix:' -Attachment ./after.png
 
+# Relations: what blocks my open work, and mark a duplicate
+Get-LinearIssue -Assignee me -StateType Unstarted, Started | Get-LinearIssueRelation -Type BlockedBy
+Add-LinearIssueRelation ENG-412 DuplicateOf ENG-398
+
 # Move issues to the trash (asks per issue unless -Confirm:$false); -Archive archives instead
 Get-LinearIssue -Team ENG -Label Spam -All | Remove-LinearIssue
 
@@ -182,6 +186,9 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { 
 | `Add-LinearAttachment` | Upload files to an issue (private by default) or link a URL to it. |
 | `Set-LinearAttachment` | Change an attachment's title or subtitle. |
 | `Remove-LinearAttachment` | Remove attachments from issues. |
+| `Get-LinearIssueRelation` | Relations of an issue, seen from it: Blocks, BlockedBy, Related, DuplicateOf, DuplicatedBy. |
+| `Add-LinearIssueRelation` | Relate issues: blocks, blocked by, related or duplicate. |
+| `Remove-LinearIssueRelation` | Remove relations, by id or between two issues. |
 | `Get-LinearRateLimit` | Rate-limit status from the latest response. |
 | `Invoke-LinearGraphQL` | Run any GraphQL query or mutation. |
 
@@ -249,7 +256,7 @@ publish. A mistake means a new version, not a re-tag.
 
 ## Roadmap
 
-- Issue relations and milestones
+- Milestones
 - `-Cycle`, `-Milestone` and `-Delegate` on `New-LinearIssue` and `Set-LinearIssue`
 - Tab completion for `-State`, `-Label` and `-Assignee`
 - Markdown help with platyPS and an online help URI

@@ -527,3 +527,53 @@ function Get-LinearTestAttachmentResponse {
     }
     $null
 }
+
+function Get-LinearTestRelationResponse {
+    # Serves the issue relation operations, or returns $null for any other request.
+    #
+    # ENG-1 blocks ENG-2 (relation-1, older) and is related to ENG-3 (relation-2); ENG-4 is a
+    # duplicate of ENG-1 (relation-3). ENG-404 and the relation id 'missing' do not exist.
+    # Creating a relation to ENG-404 fails.
+    param([Parameter(Mandatory)][hashtable] $Request)
+
+    $query = $Request.query
+    $variables = if ($Request.ContainsKey('variables')) { $Request.variables } else { @{} }
+    function New-TestIssueRef([string] $Identifier, [string] $State = 'Todo') {
+        @{ id = "issue-uuid-$Identifier"; identifier = $Identifier; title = "Issue $Identifier"; state = @{ name = $State } }
+    }
+    function New-TestRelation([string] $Id, [string] $Type, [string] $From, [string] $To, [string] $CreatedAt) {
+        @{ id = $Id; type = $Type; createdAt = $CreatedAt; issue = (New-TestIssueRef $From); relatedIssue = (New-TestIssueRef $To 'In Progress') }
+    }
+    $notFound = New-LinearTestError -Message 'Entity not found: Issue' -Code 'INPUT_ERROR' -Path 'issue'
+
+    if ($query -match 'query ListIssue(Inverse)?Relations') {
+        $inverse = $query -match 'ListIssueInverseRelations'
+        if ($variables.id -eq 'ENG-404') { return New-LinearTestResponse -Data $null -Errors @($notFound) }
+        $isEng1 = $variables.id -in 'ENG-1', 'issue-uuid-ENG-1'
+        $nodes = if (-not $isEng1) { @() }
+        elseif ($inverse) { @(New-TestRelation 'relation-3' 'duplicate' 'ENG-4' 'ENG-1' '2026-10-12T00:00:00.000Z') }
+        else {
+            @(
+                (New-TestRelation 'relation-2' 'related' 'ENG-1' 'ENG-3' '2026-10-11T00:00:00.000Z'),
+                (New-TestRelation 'relation-1' 'blocks' 'ENG-1' 'ENG-2' '2026-10-10T00:00:00.000Z')
+            )
+        }
+        $field = if ($inverse) { 'inverseRelations' } else { 'relations' }
+        return New-LinearTestResponse -Data @{ issue = @{ $field = New-LinearTestConnection -Nodes $nodes } }
+    }
+    if ($query -match 'mutation CreateIssueRelation') {
+        $relationInput = $variables.input
+        if ('ENG-404' -in $relationInput['issueId'], $relationInput['relatedIssueId']) {
+            return New-LinearTestResponse -Data @{ issueRelationCreate = $null } -Errors @($notFound)
+        }
+        $node = New-TestRelation 'relation-new' $relationInput['type'] $relationInput['issueId'] $relationInput['relatedIssueId'] '2026-10-17T00:00:00.000Z'
+        return New-LinearTestResponse -Data @{ issueRelationCreate = @{ success = $true; issueRelation = $node } }
+    }
+    if ($query -match 'mutation DeleteIssueRelation') {
+        if ($variables.id -eq 'missing') {
+            return New-LinearTestResponse -Data @{ issueRelationDelete = $null } -Errors @(New-LinearTestError -Message 'Entity not found: IssueRelation' -Code 'INPUT_ERROR')
+        }
+        return New-LinearTestResponse -Data @{ issueRelationDelete = @{ success = $true; entityId = $variables.id } }
+    }
+    $null
+}

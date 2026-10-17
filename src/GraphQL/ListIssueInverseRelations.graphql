@@ -1,0 +1,13 @@
+query ListIssueInverseRelations($id: String!, $first: Int, $after: String) {
+  issue(id: $id) {
+    inverseRelations(first: $first, after: $after) {
+      nodes {
+        ...IssueRelationFields
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}
