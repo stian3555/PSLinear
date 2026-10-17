@@ -80,6 +80,7 @@
             Tags         = @('Linear', 'LinearApp', 'GraphQL', 'IssueTracking', 'ProjectManagement', 'API', 'PSEdition_Core', 'Windows', 'Linux', 'MacOS')
             LicenseUri   = 'https://github.com/stian3555/PSLinear/blob/main/LICENSE'
             ProjectUri   = 'https://github.com/stian3555/PSLinear'
+            IconUri      = 'https://raw.githubusercontent.com/stian3555/PSLinear/main/assets/PSLinear-icon.png'
             ReleaseNotes = 'https://github.com/stian3555/PSLinear/blob/main/CHANGELOG.md'
         }
     }
