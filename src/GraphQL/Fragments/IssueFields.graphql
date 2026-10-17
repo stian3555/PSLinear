@@ -49,6 +49,14 @@ fragment IssueFields on Issue {
     id
     identifier
   }
+  delegate {
+    id
+    name
+  }
+  projectMilestone {
+    id
+    name
+  }
   labels(first: 20) {
     nodes {
       id

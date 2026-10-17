@@ -24,7 +24,9 @@ Describe 'Set-LinearIssue' {
                     return New-LinearTestResponse -Data @{ issue = $null } -Errors @($notFound)
                 }
                 $team = if ($issueId -like 'OPS-*') { @{ id = 'team-ops'; key = 'OPS' } } else { @{ id = 'team-eng'; key = 'ENG' } }
-                return New-LinearTestResponse -Data @{ issue = @{ id = [guid]::NewGuid().Guid; identifier = $issueId; team = $team } }
+                # ENG-7 is in the Website project; the others are in no project.
+                $project = if ($issueId -eq 'ENG-7') { @{ id = 'project-web'; name = 'Website' } } else { $null }
+                return New-LinearTestResponse -Data @{ issue = @{ id = [guid]::NewGuid().Guid; identifier = $issueId; team = $team; project = $project } }
             }
 
             if ($issueId -eq 'ENG-404') {
@@ -204,6 +206,54 @@ Describe 'Set-LinearIssue' {
         It 'does not warn about estimates in a team that uses them' {
             Set-LinearIssue ENG-1 -Estimate 2 -WarningVariable estimateWarnings
             $estimateWarnings.Count | Should -Be 0
+        }
+
+        It 'resolves the cycle in the issue''s team' {
+            Set-LinearIssue OPS-2 -Cycle active
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
+                (Get-RequestOperation $Body) -eq 'UpdateIssue' -and (Get-RequestVariable $Body 'input.cycleId') -eq 'cycle-ops-3'
+            }
+        }
+
+        It 'resolves a milestone in the issue''s own project' {
+            Set-LinearIssue ENG-7 -Milestone alpha
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter { (Get-RequestOperation $Body) -eq 'GetIssueTeam' }
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
+                (Get-RequestOperation $Body) -eq 'UpdateIssue' -and (Get-RequestVariable $Body 'input.projectMilestoneId') -eq 'milestone-alpha'
+            }
+        }
+
+        It 'resolves a milestone in -Project without looking up the issue' {
+            Set-LinearIssue ENG-1 -Project Website -Milestone Beta
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly -ParameterFilter { (Get-RequestOperation $Body) -eq 'GetIssueTeam' }
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
+                (Get-RequestVariable $Body 'input.projectId') -eq 'project-web' -and (Get-RequestVariable $Body 'input.projectMilestoneId') -eq 'milestone-beta'
+            }
+        }
+
+        It 'uses the ProjectId of piped issues for a milestone' {
+            $issue = [pscustomobject]@{ PSTypeName = 'PSLinear.Issue'; Id = 'issue-uuid'; Identifier = 'ENG-9'; TeamId = 'team-eng'; ProjectId = 'project-web' }
+            $issue | Set-LinearIssue -Milestone Beta
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly -ParameterFilter { (Get-RequestOperation $Body) -eq 'GetIssueTeam' }
+        }
+
+        It 'stops when an issue without a project gets a milestone name' {
+            { Set-LinearIssue ENG-1 -Milestone Beta } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*' -ExpectedMessage "*Issue 'ENG-1' is not in a project*"
+        }
+
+        It 'delegates to an agent, and clears the milestone and delegate' {
+            Set-LinearIssue ENG-1 -Delegate 'grace@example.com'
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter { (Get-RequestVariable $Body 'input.delegateId') -eq 'user-grace' }
+            Set-LinearIssue ENG-1 -Clear Milestone, Delegate
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
+                $issueInput = Get-RequestVariable $Body 'input'
+                $null -ne $issueInput -and $issueInput.Contains('projectMilestoneId') -and $null -eq $issueInput['projectMilestoneId'] -and
+                $issueInput.Contains('delegateId') -and $null -eq $issueInput['delegateId']
+            }
+        }
+
+        It 'rejects -Clear Cycle together with -Cycle' {
+            { Set-LinearIssue ENG-1 -Cycle next -Clear Cycle } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*'
         }
 
         It 'returns the updated issue with -PassThru' {

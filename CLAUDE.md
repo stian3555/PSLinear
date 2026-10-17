@@ -5,7 +5,7 @@ PowerShell 7.4+ only (`CompatiblePSEditions = Core`), cross-platform.
 
 ## Commands
 
-- `./build.ps1 -Bootstrap` builds `output/PSLinear`, runs PSScriptAnalyzer, then Pester against the built module. It must pass before you finish a task.
+- `./build.ps1 -Bootstrap` runs PSScriptAnalyzer on `src`, builds `output/PSLinear`, then runs Pester against the built module. It must pass before you finish a task. Keep Analyze before Build: the analyzer crashes far more often after the Build task in the same session (`build.ps1` retries that crash).
 - `./build.ps1 -Task Build, Test` skips the analyzer for a quicker loop.
 - `Invoke-Pester ./tests` tests the source in `src/` directly (no build needed).
 - `npm ci --prefix tools && node tools/validate-graphql.mjs` validates every operation in `src/GraphQL` against Linear's latest published schema. Run it after adding or changing any `.graphql` file.
@@ -112,7 +112,7 @@ Releases cannot be undone. A `v*` tag cannot be moved or deleted (repository rul
 
 **4. Publishing.**
 - `.github/workflows/publish.yml` runs when the release is published. It uses the `psgallery` environment, which holds the `PSGALLERY_API_KEY` secret and only accepts `v*` tags.
-- The workflow checks that the tag matches the manifest, then runs `./build.ps1 -Task Build, Analyze, Test, Publish -Bootstrap`.
+- The workflow checks that the tag matches the manifest, then runs `./build.ps1 -Task Analyze, Build, Test, Publish -Bootstrap`.
 - Follow it with `gh run watch <run id> --exit-status`. Then confirm with `Find-PSResource -Name PSLinear -Repository PSGallery` (add `-Prerelease` for previews), and save it with `Save-PSResource` to a temp folder to check that it imports.
 - If the workflow fails after the tag exists, fix the cause and release a new version. The tag cannot be reused.
 

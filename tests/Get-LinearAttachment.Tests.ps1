@@ -22,6 +22,9 @@ Describe 'Get-LinearAttachment' {
         $attachments[0].Source | Should -BeNullOrEmpty -Because "Linear reports uploads as source 'unknown'"
         $attachments[1].Source | Should -Be 'github'
         $attachments[1].Subtitle | Should -Be 'PR #42'
+        $attachments[1].Metadata.status | Should -Be 'merged'
+        $attachments[1].Metadata.reviews.approved | Should -Be 2 -Because 'integration metadata can be nested'
+        $attachments[0].Metadata.Count | Should -Be 0
         Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
             (Get-RequestOperation $Body) -eq 'ListIssueAttachments' -and (Get-RequestVariable $Body 'id') -eq 'ENG-1'
         }

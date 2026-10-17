@@ -196,6 +196,82 @@ Describe 'Name resolution' {
         }
     }
 
+    Context 'Cycles' {
+        It 'resolves <Reference> to <Expected>' -ForEach @(
+            @{ Reference = 'active'; Expected = 'cycle-eng-12' }
+            @{ Reference = 'Current'; Expected = 'cycle-eng-12' }
+            @{ Reference = 'next'; Expected = 'cycle-eng-13' }
+            @{ Reference = 'previous'; Expected = 'cycle-eng-11' }
+            @{ Reference = '+1'; Expected = 'cycle-eng-13' }
+            @{ Reference = '-2'; Expected = 'cycle-eng-10' }
+            @{ Reference = '12'; Expected = 'cycle-eng-12' }
+            @{ Reference = 'release sprint'; Expected = 'cycle-eng-13' }
+        ) {
+            InModuleScope PSLinear -Parameters @{ Reference = $Reference } { param($Reference) Resolve-LinearCycleId -TeamId 'team-eng' -Cycle $Reference } |
+                Should -Be $Expected
+        }
+
+        It 'caches cycles per team' {
+            InModuleScope PSLinear {
+                $null = Resolve-LinearCycleId -TeamId 'team-eng' -Cycle 'active'
+                $null = Resolve-LinearCycleId -TeamId 'team-eng' -Cycle 'next'
+            }
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter { (Get-RequestOperation $Body) -eq 'ListCycles' }
+        }
+
+        It 'lists the ways to name a cycle when one is not found' {
+            { InModuleScope PSLinear { Resolve-LinearCycleId -TeamId 'team-eng' -Cycle 'Sprint 99' } } |
+                Should -Throw -ErrorId 'PSLinear.CycleNotFound*' -ExpectedMessage "Cycle 'Sprint 99' was not found in team ENG. Use active, next, previous, +1 or -1, a number (10 to 13) or a name (Release sprint)."
+        }
+
+        It 'says so when a team has no cycles' {
+            { InModuleScope PSLinear { Resolve-LinearCycleId -TeamId 'team-none' -Cycle 'active' } } |
+                Should -Throw -ErrorId 'PSLinear.CycleNotFound*' -ExpectedMessage '*has no cycles*'
+        }
+
+        It 'accepts a cycle id without a lookup' {
+            $cycleId = [guid]::NewGuid().Guid
+            InModuleScope PSLinear -Parameters @{ CycleId = $cycleId } { param($CycleId) Resolve-LinearCycleId -TeamId 'team-eng' -Cycle $CycleId } | Should -Be $cycleId
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
+        }
+    }
+
+    Context 'Milestones' {
+        It 'resolves a milestone name within the project, case-insensitively' {
+            InModuleScope PSLinear { Resolve-LinearMilestoneId -ProjectId 'project-web' -Milestone 'beta' } | Should -Be 'milestone-beta'
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
+                (Get-RequestVariable $Body 'filter.project.id.eq') -eq 'project-web'
+            }
+        }
+
+        It 'lists the project''s milestones in order when one is not found' {
+            { InModuleScope PSLinear { Resolve-LinearMilestoneId -ProjectId 'project-web' -Milestone 'GA' } } |
+                Should -Throw -ErrorId 'PSLinear.MilestoneNotFound*' -ExpectedMessage "Milestone 'GA' was not found in project 'Website'. Valid milestones: Alpha, Beta."
+        }
+
+        It 'says so when the project has no milestones' {
+            { InModuleScope PSLinear { Resolve-LinearMilestoneId -ProjectId 'project-mobile' -Milestone 'Beta' } } |
+                Should -Throw -ErrorId 'PSLinear.MilestoneNotFound*' -ExpectedMessage "Project 'Mobile App' has no milestones."
+        }
+    }
+
+    Context 'Templates' {
+        It 'prefers the team''s own template over a workspace template with the same name' {
+            InModuleScope PSLinear { Resolve-LinearTemplateId -TeamId 'team-eng' -Template 'bug report' } | Should -Be 'template-eng-bug'
+            InModuleScope PSLinear { Resolve-LinearTemplateId -TeamId 'team-ops' -Template 'Bug report' } | Should -Be 'template-bug'
+        }
+
+        It 'only offers issue templates of the team and the workspace' {
+            InModuleScope PSLinear { Resolve-LinearTemplateId -TeamId 'team-ops' -Template 'Incident' } | Should -Be 'template-ops-incident'
+            { InModuleScope PSLinear { Resolve-LinearTemplateId -TeamId 'team-eng' -Template 'Kickoff' } } |
+                Should -Throw -ErrorId 'PSLinear.TemplateNotFound*' -ExpectedMessage "No issue template named 'Kickoff' for team ENG. Valid templates: Bug report, Bug report."
+        }
+
+        It 'resolves project templates with -Type' {
+            InModuleScope PSLinear { Resolve-LinearTemplateId -Template 'Kickoff' -Type 'project' } | Should -Be 'template-kickoff'
+        }
+    }
+
     Context 'Users' {
         It 'resolves me from the connection without a request' {
             InModuleScope PSLinear {

@@ -24,6 +24,7 @@
         'Get-LinearProject'
         'Get-LinearRateLimit'
         'Get-LinearTeam'
+        'Get-LinearTemplate'
         'Get-LinearUser'
         'Get-LinearViewer'
         'Get-LinearWorkflowState'

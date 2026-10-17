@@ -83,7 +83,17 @@ Describe 'Team tab completion' {
         InModuleScope PSLinear { $script:LinearContext = $null }
         $env:LINEAR_API_KEY = $null
         $line = 'Get-LinearIssue -Team E'
-        $completions = TabExpansion2 -inputScript $line -cursorColumn $line.Length
+        # When a completer returns nothing, PowerShell falls back to file names in the current
+        # directory, so complete from an empty one.
+        $emptyDirectory = Join-Path $TestDrive 'empty'
+        $null = New-Item -ItemType Directory -Path $emptyDirectory -Force
+        Push-Location -LiteralPath $emptyDirectory
+        try {
+            $completions = TabExpansion2 -inputScript $line -cursorColumn $line.Length
+        }
+        finally {
+            Pop-Location
+        }
         $completions.CompletionMatches | Should -BeNullOrEmpty
     }
 }

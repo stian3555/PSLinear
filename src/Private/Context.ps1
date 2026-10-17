@@ -74,7 +74,8 @@ function Test-LinearConnection {
 function Clear-LinearCache {
     <#
     .SYNOPSIS
-        Clears cached lookups (teams, workflow states, labels, users, projects). Called whenever the connection changes.
+        Clears cached lookups (teams, workflow states, labels, users, projects, cycles, milestones,
+        templates). Called whenever the connection changes.
     #>
     [CmdletBinding()]
     param()
@@ -87,6 +88,10 @@ function Clear-LinearCache {
     $script:LinearProjectCacheExpires = [datetime]::MinValue
     $script:LinearWorkflowStateCache = @{}
     $script:LinearLabelCache = @{}
+    $script:LinearCycleCache = @{}
+    $script:LinearMilestoneCache = @{}
+    $script:LinearTemplateCache = $null
+    $script:LinearTemplateCacheExpires = [datetime]::MinValue
 }
 
 function Get-LinearAuthorizationValue {

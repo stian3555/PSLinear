@@ -50,7 +50,9 @@ function New-LinearTestIssueNode {
         [string] $StateType = 'unstarted',
         [string] $Assignee = 'Ada Lovelace',
         [string[]] $Labels = @('Bug'),
-        [int] $Priority = 2
+        [int] $Priority = 2,
+        [string] $Milestone,
+        [string] $Delegate
     )
     $number = [int]($Identifier -replace '^.*-', '')
     [ordered]@{
@@ -78,6 +80,8 @@ function New-LinearTestIssueNode {
         project       = $null
         cycle         = $null
         parent        = $null
+        delegate      = if ($Delegate) { @{ id = 'user-agent'; name = $Delegate } } else { $null }
+        projectMilestone = if ($Milestone) { @{ id = 'milestone-x'; name = $Milestone } } else { $null }
         labels        = @{ nodes = @(foreach ($label in $Labels) { @{ id = "label-$label"; name = $label } }) }
     }
 }
@@ -133,7 +137,10 @@ function Get-LinearTestLookupResponse {
     # Users:    Ada Lovelace (the viewer), Grace Hopper, two users named Alex Smith, and the
     #           disabled Old Timer (only with includeDisabled)
     # Projects: Website, Mobile App, and the archived Legacy (only with includeArchived)
-    # Cycles:   ENG 10 (past), 11 (previous), 12 (active), 13 (next); OPS 3 (active)
+    # Cycles:   ENG 10 (past), 11 (previous), 12 (active), 13 (next, named 'Release sprint'); OPS 3 (active)
+    # Milestones: Website has Alpha and Beta; Mobile App has none
+    # Templates: issue templates 'Bug report' (workspace and ENG's own) and 'Incident' (OPS),
+    #           project template 'Kickoff', document template 'RFC'
     param([Parameter(Mandatory)][hashtable] $Request)
 
     $query = $Request.query
@@ -248,6 +255,30 @@ function Get-LinearTestLookupResponse {
         return New-LinearTestResponse -Data @{ projects = New-LinearTestConnection -Nodes $projects }
     }
 
+    if ($query -match 'query ListProjectMilestones') {
+        $projectId = $variables.filter.project.id.eq
+        $nodes = if ($projectId -eq 'project-web') {
+            @(
+                @{ id = 'milestone-beta'; name = 'Beta'; description = $null; targetDate = '2026-12-01'; status = 'next'; progress = 0.1; sortOrder = 2; project = @{ id = 'project-web'; name = 'Website' } }
+                @{ id = 'milestone-alpha'; name = 'Alpha'; description = 'First cut'; targetDate = '2026-11-01'; status = 'done'; progress = 1; sortOrder = 1; project = @{ id = 'project-web'; name = 'Website' } }
+            )
+        }
+        else { @() }
+        return New-LinearTestResponse -Data @{ projectMilestones = New-LinearTestConnection -Nodes $nodes }
+    }
+
+    if ($query -match 'query ListTemplates') {
+        return New-LinearTestResponse -Data @{
+            templates = @(
+                @{ id = 'template-bug'; name = 'Bug report'; type = 'issue'; description = 'Workspace bug form'; content = '## Steps'; lastAppliedAt = $null; team = $null }
+                @{ id = 'template-eng-bug'; name = 'Bug report'; type = 'issue'; description = 'ENG bug form'; content = '## Repro'; lastAppliedAt = $null; team = @{ id = 'team-eng'; key = 'ENG' } }
+                @{ id = 'template-ops-incident'; name = 'Incident'; type = 'issue'; description = $null; content = $null; lastAppliedAt = $null; team = @{ id = 'team-ops'; key = 'OPS' } }
+                @{ id = 'template-kickoff'; name = 'Kickoff'; type = 'project'; description = $null; content = $null; lastAppliedAt = $null; team = $null }
+                @{ id = 'template-rfc'; name = 'RFC'; type = 'document'; description = $null; content = $null; lastAppliedAt = $null; team = $null }
+            )
+        }
+    }
+
     if ($query -match 'query ListCycles') {
         $filter = if ($variables.ContainsKey('filter')) { $variables.filter } else { @{} }
         $cycles = @(
@@ -255,7 +286,7 @@ function Get-LinearTestLookupResponse {
             @{ id = 'cycle-ops-3'; number = 3; team = 'team-ops'; flags = @('isActive') }
             @{ id = 'cycle-eng-12'; number = 12; team = 'team-eng'; flags = @('isActive') }
             @{ id = 'cycle-eng-10'; number = 10; team = 'team-eng'; flags = @('isPast') }
-            @{ id = 'cycle-eng-13'; number = 13; team = 'team-eng'; flags = @('isNext', 'isFuture') }
+            @{ id = 'cycle-eng-13'; number = 13; team = 'team-eng'; flags = @('isNext', 'isFuture'); name = 'Release sprint' }
             @{ id = 'cycle-eng-11'; number = 11; team = 'team-eng'; flags = @('isPrevious', 'isPast') }
         )
         $nodes = foreach ($cycle in $cycles) {
@@ -265,7 +296,7 @@ function Get-LinearTestLookupResponse {
             $node = [ordered]@{
                 id          = $cycle.id
                 number      = $cycle.number
-                name        = $null
+                name        = if ($cycle.ContainsKey('name')) { $cycle.name } else { $null }
                 startsAt    = '2026-10-12T00:00:00.000Z'
                 endsAt      = '2026-10-26T00:00:00.000Z'
                 completedAt = $null
@@ -424,7 +455,8 @@ function New-LinearTestAttachmentNode {
         [string] $Url = 'https://uploads.linear.app/asset/screenshot.png',
         [string] $Issue = 'ENG-1',
         [string] $SourceType,
-        [string] $CreatedAt = '2026-10-10T10:00:00.000Z'
+        [string] $CreatedAt = '2026-10-10T10:00:00.000Z',
+        [System.Collections.IDictionary] $Metadata = @{}
     )
     [ordered]@{
         id         = $Id
@@ -432,6 +464,7 @@ function New-LinearTestAttachmentNode {
         subtitle   = if ($Subtitle) { $Subtitle } else { $null }
         url        = $Url
         sourceType = if ($SourceType) { $SourceType } else { $null }
+        metadata   = $Metadata
         createdAt  = $CreatedAt
         updatedAt  = $CreatedAt
         creator    = @{ id = 'user-ada'; name = 'Ada Lovelace' }
@@ -456,7 +489,7 @@ function Get-LinearTestAttachmentResponse {
     $notFound = New-LinearTestError -Message 'Entity not found: Attachment' -Code 'INPUT_ERROR'
     $attachments = @{
         'attachment-1' = New-LinearTestAttachmentNode -Id 'attachment-1' -SourceType 'unknown' -CreatedAt '2026-10-09T09:00:00.000Z'
-        'attachment-2' = New-LinearTestAttachmentNode -Id 'attachment-2' -Title 'Fix login' -Url 'https://github.com/acme/app/pull/42' -SourceType 'github' -Subtitle 'PR #42'
+        'attachment-2' = New-LinearTestAttachmentNode -Id 'attachment-2' -Title 'Fix login' -Url 'https://github.com/acme/app/pull/42' -SourceType 'github' -Subtitle 'PR #42' -Metadata ([ordered]@{ status = 'merged'; reviews = @{ approved = 2 } })
     }
 
     if ($query -match 'query GetIssueTeam') {
@@ -491,7 +524,8 @@ function Get-LinearTestAttachmentResponse {
             return New-LinearTestResponse -Data @{ attachmentCreate = $null } -Errors @(New-LinearTestError -Message 'Argument Validation Error' -Code 'INPUT_ERROR')
         }
         $issue = $attachmentInput['issueId'] -replace '^issue-uuid-', ''
-        $node = New-LinearTestAttachmentNode -Id 'attachment-new' -Title $attachmentInput['title'] -Subtitle $attachmentInput['subtitle'] -Url $attachmentInput['url'] -Issue $issue
+        $metadata = if ($attachmentInput.Contains('metadata')) { $attachmentInput['metadata'] } else { @{} }
+        $node = New-LinearTestAttachmentNode -Id 'attachment-new' -Title $attachmentInput['title'] -Subtitle $attachmentInput['subtitle'] -Url $attachmentInput['url'] -Issue $issue -Metadata $metadata
         return New-LinearTestResponse -Data @{ attachmentCreate = @{ success = $true; attachment = $node } }
     }
     if ($query -match 'mutation LinkAttachmentUrl') {
@@ -515,10 +549,15 @@ function Get-LinearTestAttachmentResponse {
         return New-LinearTestResponse -Data @{ attachment = $attachments[$variables.id] }
     }
     if ($query -match 'mutation UpdateAttachment') {
+        if ($variables.id -eq 'attachment-link') {
+            $node = New-LinearTestAttachmentNode -Id 'attachment-link' -Title $variables.input['title'] -Url 'https://example.com/doc' -Metadata $variables.input['metadata']
+            return New-LinearTestResponse -Data @{ attachmentUpdate = @{ success = $true; attachment = $node } }
+        }
         if (-not $attachments.ContainsKey($variables.id)) { return New-LinearTestResponse -Data @{ attachmentUpdate = $null } -Errors @($notFound) }
         $node = $attachments[$variables.id]
         $node['title'] = $variables.input['title']
         if ($variables.input.Contains('subtitle')) { $node['subtitle'] = $variables.input['subtitle'] }
+        if ($variables.input.Contains('metadata')) { $node['metadata'] = $variables.input['metadata'] }
         return New-LinearTestResponse -Data @{ attachmentUpdate = @{ success = $true; attachment = $node } }
     }
     if ($query -match 'mutation DeleteAttachment') {

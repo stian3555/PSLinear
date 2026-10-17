@@ -4,6 +4,7 @@ fragment AttachmentFields on Attachment {
   subtitle
   url
   sourceType
+  metadata
   createdAt
   updatedAt
   creator {

@@ -10,7 +10,9 @@
     Publish  Publishes output/PSLinear to the PowerShell Gallery.
 
 .PARAMETER Task
-    One or more tasks, run in the order given. Defaults to Build, Analyze, Test.
+    One or more tasks, run in the order given. Defaults to Analyze, Build, Test.
+    Analyze reads the sources, not the built module, and runs first: PSScriptAnalyzer crashes far more
+    often when it runs after the Build task in the same session.
 
 .PARAMETER Bootstrap
     Installs Pester and PSScriptAnalyzer for the current user when they are missing.
@@ -21,7 +23,7 @@
 .EXAMPLE
     ./build.ps1
 
-    Builds, analyzes and tests.
+    Analyzes, builds and tests.
 
 .EXAMPLE
     ./build.ps1 -Task Build, Test -Bootstrap
@@ -32,7 +34,7 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Build', 'Analyze', 'Test', 'Publish')]
-    [string[]] $Task = @('Build', 'Analyze', 'Test'),
+    [string[]] $Task = @('Analyze', 'Build', 'Test'),
 
     [switch] $Bootstrap,
 
@@ -102,10 +104,11 @@ function Invoke-Build {
 
 function Invoke-AnalyzerWithRetry([string] $Path, [switch] $Recurse) {
     # PSScriptAnalyzer intermittently fails with "Object reference not set to an instance of an
-    # object" (a NullReferenceException inside the analyzer, seen locally and in CI); running it
-    # again succeeds. Retry only that failure, so real errors and findings still surface.
+    # object" (a NullReferenceException inside the analyzer, seen locally and in CI), mostly when it
+    # runs after the Build task; running it again succeeds. Retry only that failure, so real errors
+    # and findings still surface.
     $settings = Join-Path $PSScriptRoot 'PSScriptAnalyzerSettings.psd1'
-    $maxAttempts = 3
+    $maxAttempts = 5
     for ($attempt = 1; ; $attempt++) {
         try {
             return @(Invoke-ScriptAnalyzer -Path $Path -Recurse:$Recurse -Settings $settings)

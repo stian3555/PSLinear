@@ -34,6 +34,8 @@ function ConvertTo-LinearIssue {
             Team          = Get-LinearNestedValue -InputObject $node.team -Name 'key'
             Project       = Get-LinearNestedValue -InputObject $node.project -Name 'name'
             Cycle         = Get-LinearNestedValue -InputObject $node.cycle -Name 'number'
+            Milestone     = Get-LinearNestedValue -InputObject $node -Name 'projectMilestone.name'
+            Delegate      = Get-LinearNestedValue -InputObject $node -Name 'delegate.name'
             Labels        = [string[]]@(foreach ($label in @(Get-LinearNestedValue -InputObject $node -Name 'labels.nodes')) { Get-LinearNestedValue -InputObject $label -Name 'name' })
             Parent        = Get-LinearNestedValue -InputObject $node.parent -Name 'identifier'
             Creator       = Get-LinearNestedValue -InputObject $node.creator -Name 'name'
@@ -52,6 +54,8 @@ function ConvertTo-LinearIssue {
             TeamId        = Get-LinearNestedValue -InputObject $node.team -Name 'id'
             ProjectId     = Get-LinearNestedValue -InputObject $node.project -Name 'id'
             CycleId       = Get-LinearNestedValue -InputObject $node.cycle -Name 'id'
+            MilestoneId   = Get-LinearNestedValue -InputObject $node -Name 'projectMilestone.id'
+            DelegateId    = Get-LinearNestedValue -InputObject $node -Name 'delegate.id'
         }
     }
 }
@@ -252,7 +256,8 @@ function ConvertTo-LinearAttachment {
         Flattens an Attachment node (AttachmentFields fragment) into a PSLinear.Attachment object.
     .NOTES
         Source is the integration that created a link (github, slack, ...), or null for uploads
-        and plain links.
+        and plain links. Metadata is an ordered hashtable: values you set, or what an integration
+        stores (which can be nested).
     #>
     [CmdletBinding()]
     [OutputType('PSLinear.Attachment')]
@@ -267,6 +272,11 @@ function ConvertTo-LinearAttachment {
         # Linear reports uploads and plain links as source 'unknown'.
         $source = Get-LinearNestedValue -InputObject $InputObject -Name 'sourceType'
         if ($source -eq 'unknown') { $source = $null }
+        $metadata = [ordered]@{}
+        $rawMetadata = Get-LinearNestedValue -InputObject $InputObject -Name 'metadata'
+        if ($null -ne $rawMetadata) {
+            foreach ($property in $rawMetadata.PSObject.Properties) { $metadata[$property.Name] = $property.Value }
+        }
         [pscustomobject]@{
             PSTypeName = 'PSLinear.Attachment'
             Id         = $InputObject.id
@@ -275,6 +285,7 @@ function ConvertTo-LinearAttachment {
             Subtitle   = Get-LinearNestedValue -InputObject $InputObject -Name 'subtitle'
             Url        = Get-LinearNestedValue -InputObject $InputObject -Name 'url'
             Source     = $source
+            Metadata   = $metadata
             Creator    = Get-LinearNestedValue -InputObject $InputObject -Name 'creator.name'
             CreatedAt  = Get-LinearNestedValue -InputObject $InputObject -Name 'createdAt'
             UpdatedAt  = Get-LinearNestedValue -InputObject $InputObject -Name 'updatedAt'
@@ -327,6 +338,66 @@ function ConvertTo-LinearIssueRelation {
             ApiType        = $apiType
             IssueId        = Get-LinearNestedValue -InputObject $InputObject -Name "$ownPath.id"
             RelatedIssueId = Get-LinearNestedValue -InputObject $InputObject -Name "$otherPath.id"
+        }
+    }
+}
+
+function ConvertTo-LinearMilestone {
+    <#
+    .SYNOPSIS
+        Flattens a ProjectMilestone node into a PSLinear.Milestone object. Status is Unstarted, Next, Overdue or Done.
+    #>
+    [CmdletBinding()]
+    [OutputType('PSLinear.Milestone')]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [AllowNull()]
+        [object] $InputObject
+    )
+
+    process {
+        if ($null -eq $InputObject) { return }
+        $status = [string](Get-LinearNestedValue -InputObject $InputObject -Name 'status')
+        [pscustomobject]@{
+            PSTypeName  = 'PSLinear.Milestone'
+            Id          = $InputObject.id
+            Project     = Get-LinearNestedValue -InputObject $InputObject -Name 'project.name'
+            Name        = $InputObject.name
+            Status      = if ($status) { $status.Substring(0, 1).ToUpperInvariant() + $status.Substring(1) } else { $null }
+            TargetDate  = Get-LinearNestedValue -InputObject $InputObject -Name 'targetDate'
+            Progress    = Get-LinearNestedValue -InputObject $InputObject -Name 'progress'
+            Description = Get-LinearNestedValue -InputObject $InputObject -Name 'description'
+            SortOrder   = Get-LinearNestedValue -InputObject $InputObject -Name 'sortOrder'
+            ProjectId   = Get-LinearNestedValue -InputObject $InputObject -Name 'project.id'
+        }
+    }
+}
+
+function ConvertTo-LinearTemplate {
+    <#
+    .SYNOPSIS
+        Flattens a Template node into a PSLinear.Template object. Team is $null for workspace templates.
+    #>
+    [CmdletBinding()]
+    [OutputType('PSLinear.Template')]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [AllowNull()]
+        [object] $InputObject
+    )
+
+    process {
+        if ($null -eq $InputObject) { return }
+        [pscustomobject]@{
+            PSTypeName    = 'PSLinear.Template'
+            Id            = $InputObject.id
+            Name          = $InputObject.name
+            Type          = Get-LinearNestedValue -InputObject $InputObject -Name 'type'
+            Team          = Get-LinearNestedValue -InputObject $InputObject -Name 'team.key'
+            Description   = Get-LinearNestedValue -InputObject $InputObject -Name 'description'
+            Content       = Get-LinearNestedValue -InputObject $InputObject -Name 'content'
+            LastAppliedAt = Get-LinearNestedValue -InputObject $InputObject -Name 'lastAppliedAt'
+            TeamId        = Get-LinearNestedValue -InputObject $InputObject -Name 'team.id'
         }
     }
 }

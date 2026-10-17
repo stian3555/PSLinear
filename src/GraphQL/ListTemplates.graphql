@@ -1,0 +1,14 @@
+query ListTemplates {
+  templates {
+    id
+    name
+    type
+    description
+    content
+    lastAppliedAt
+    team {
+      id
+      key
+    }
+  }
+}

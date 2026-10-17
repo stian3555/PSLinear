@@ -1,12 +1,12 @@
 function Set-LinearAttachment {
     <#
     .SYNOPSIS
-        Changes the title or subtitle of Linear issue attachments.
+        Changes the title, subtitle or metadata of Linear issue attachments.
 
     .DESCRIPTION
         Updates attachments given by id or piped in from Get-LinearAttachment. Linear needs the
-        title on every update, so when only -Subtitle is given the current title is kept (looked
-        up for attachments given by id). Nothing is returned unless you use -PassThru.
+        title on every update, so when -Title is not given the current title is kept (looked up
+        for attachments given by id). Nothing is returned unless you use -PassThru.
 
         A missing attachment, or a change Linear rejects, writes a non-terminating error and the
         remaining attachments are still processed.
@@ -23,6 +23,11 @@ function Set-LinearAttachment {
     .PARAMETER Subtitle
         The new subtitle. An empty string removes it.
 
+    .PARAMETER Metadata
+        New metadata for the attachment, as a hashtable of string and number values. It replaces
+        the attachment's metadata; @{} removes it. To change one value, start from the current
+        metadata: $m = $attachment.Metadata; $m.status = 'done'; $attachment | Set-LinearAttachment -Metadata $m
+
     .PARAMETER PassThru
         Returns the updated attachments.
 
@@ -35,6 +40,11 @@ function Set-LinearAttachment {
         Set-LinearAttachment -Id 3f2a9c1e-0000-4000-8000-000000000000 -Subtitle '' -PassThru
 
         Removes an attachment's subtitle and returns it.
+
+    .EXAMPLE
+        Get-LinearAttachment ENG-123 | Where-Object { $_.Metadata.pipeline -eq 'nightly' } | Set-LinearAttachment -Metadata @{ pipeline = 'nightly'; failures = 0 }
+
+        Updates the metadata of the attachments a nightly pipeline added.
 
     .INPUTS
         System.String
@@ -63,14 +73,23 @@ function Set-LinearAttachment {
         [AllowEmptyString()]
         [string] $Subtitle,
 
+        [ValidateNotNull()]
+        [System.Collections.IDictionary] $Metadata,
+
         [switch] $PassThru
     )
 
     begin {
-        $changes = Format-LinearChangeList -BoundParameters $PSBoundParameters -Name 'Title', 'Subtitle'
+        $changes = Format-LinearChangeList -BoundParameters $PSBoundParameters -Name 'Title', 'Subtitle', 'Metadata'
         if (-not $changes) {
-            $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message 'Specify -Title, -Subtitle or both.' `
+            $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message 'Specify -Title, -Subtitle, -Metadata or a combination.' `
                         -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument))
+        }
+        try {
+            $metadataInput = if ($PSBoundParameters.ContainsKey('Metadata')) { ConvertTo-LinearAttachmentMetadataInput -Metadata $Metadata } else { $null }
+        }
+        catch {
+            $PSCmdlet.ThrowTerminatingError($_)
         }
     }
 
@@ -110,6 +129,7 @@ function Set-LinearAttachment {
             if ($PSBoundParameters.ContainsKey('Subtitle')) {
                 $attachmentInput['subtitle'] = if ($Subtitle) { $Subtitle } else { $null }
             }
+            if ($null -ne $metadataInput) { $attachmentInput['metadata'] = $metadataInput }
             $result = Invoke-LinearRequest -Query (Get-LinearGraphQLDocument -Name 'UpdateAttachment') `
                 -Variables @{ id = $target.Id; input = $attachmentInput } -IncludeErrors
             $updated = Get-LinearNestedValue -InputObject $result.Data -Name 'attachmentUpdate.attachment'
