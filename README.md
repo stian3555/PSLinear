@@ -75,6 +75,7 @@ Get-LinearIssue ENG-123     # one issue
 | Personal API key (value) | `Connect-Linear -ApiKey $secureString` |
 | SecretManagement vault | `Connect-Linear -SecretName LinearApiKey [-Vault MyVault]` |
 | Environment variable | `Connect-Linear -FromEnvironment`, or just set `LINEAR_API_KEY` |
+| Sign in through the browser (OAuth) | `Connect-Linear -Browser -ClientId <id> [-SecretName LinearSignIn]` |
 | OAuth access token | `Connect-Linear -AccessToken $secureString` |
 
 When `LINEAR_API_KEY` is set, every command connects implicitly, so pipelines need no
@@ -85,6 +86,29 @@ Install-PSResource Microsoft.PowerShell.SecretManagement, Microsoft.PowerShell.S
 Set-Secret -Name LinearApiKey -Secret (Read-Host -AsSecureString 'Linear API key')
 Connect-Linear -SecretName LinearApiKey
 ```
+
+### Signing in through the browser
+
+`Connect-Linear -Browser` opens Linear's consent page and receives the result on a local
+address, like the official Linear integrations do. It uses OAuth 2.0 with PKCE, so there is no
+client secret to keep. You need the client id of a Linear OAuth application:
+
+1. In Linear, go to **Settings > API > OAuth applications** and create an application. Its
+   name is shown on the consent page and cannot contain the word "Linear"; something like
+   "PSL" or "PowerShell CLI" works.
+2. Add these callback URLs:
+   `http://localhost:47821/callback` and `http://127.0.0.1:47821/callback`.
+3. Connect with its client id (or set `LINEAR_OAUTH_CLIENT_ID`):
+
+```powershell
+Connect-Linear -Browser -ClientId 'your-client-id' -SecretName LinearSignIn
+```
+
+Access tokens last 24 hours and are renewed automatically. With `-SecretName`, the refresh
+token is saved in your SecretManagement vault, so later sessions sign in without the browser.
+`Disconnect-Linear -Revoke` revokes the tokens at Linear and removes the saved one. Use
+`-Scope` to ask for other permissions (`read`, `write`, `issues:create`, `comments:create`,
+`timeSchedule:write`, `admin`) and `-RedirectUri` to use another port.
 
 ## Examples
 
@@ -197,8 +221,8 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { 
 
 | Command | Description |
 | --- | --- |
-| `Connect-Linear` | Connect with an API key, OAuth token, vault secret or environment variable. |
-| `Disconnect-Linear` | Forget the credential and cached data. |
+| `Connect-Linear` | Connect with an API key, a browser sign-in (OAuth with PKCE), an OAuth token, a vault secret or an environment variable. |
+| `Disconnect-Linear` | Forget the credential and cached data; `-Revoke` also revokes an OAuth sign-in. |
 | `Get-LinearViewer` | The authenticated user and organization. |
 | `Get-LinearTeam` | Teams, filterable by key or name with wildcards. |
 | `New-LinearTeam` | Create a team or sub-team. |
@@ -264,7 +288,8 @@ Run `Get-Help <command> -Full` for parameters and more examples.
 ## How it works with the Linear API
 
 - **Endpoint and auth.** All calls go to `https://api.linear.app/graphql`. Personal API keys
-  are sent in the `Authorization` header as-is; OAuth tokens use `Bearer`.
+  are sent in the `Authorization` header as-is; OAuth tokens use `Bearer`, and tokens from a
+  browser sign-in are renewed shortly before they expire (or once, when Linear rejects one).
 - **Rate limits.** Linear limits requests and query complexity per hour, per user. PSLinear
   retries rate-limited calls with exponential backoff (3 times by default, set with
   `Connect-Linear -MaxRetries`). `Get-LinearRateLimit` shows the remaining budget.
