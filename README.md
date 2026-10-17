@@ -166,12 +166,19 @@ node tools/validate-graphql.mjs
 2. Create a GitHub release with a matching tag, for example `v0.1.0-preview1`.
 3. The `Publish` workflow builds, tests and publishes to the PowerShell Gallery.
 
+Releases are immutable and `v*` tags cannot be moved or deleted, so check the version before you
+publish. A mistake means a new version, not a re-tag.
+
 ## Roadmap
 
 - `New-LinearIssue`, `Set-LinearIssue` (with `-WhatIf`), `Remove-LinearIssue` (archive or trash)
 - Comments, projects, cycles, labels, workflow states and users
 - Tab completion for `-State`, `-Label` and `-Assignee`
 - Markdown help with platyPS and an online help URI
+
+## Security
+
+Please report vulnerabilities privately, as described in [SECURITY.md](SECURITY.md).
 
 ## License
 
