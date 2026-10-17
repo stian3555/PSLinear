@@ -68,14 +68,18 @@ function ConvertTo-LinearTeam {
     process {
         if ($null -eq $InputObject) { return }
         [pscustomobject]@{
-            PSTypeName  = 'PSLinear.Team'
-            Id          = $InputObject.id
-            Key         = $InputObject.key
-            Name        = $InputObject.name
-            Description = $InputObject.description
-            Visibility  = $InputObject.visibility
-            CreatedAt   = $InputObject.createdAt
-            ArchivedAt  = $InputObject.archivedAt
+            PSTypeName        = 'PSLinear.Team'
+            Id                = $InputObject.id
+            Key               = $InputObject.key
+            Name              = $InputObject.name
+            Description       = $InputObject.description
+            Visibility        = $InputObject.visibility
+            Parent            = Get-LinearNestedValue -InputObject $InputObject -Name 'parent.key'
+            EstimationType    = Get-LinearNestedValue -InputObject $InputObject -Name 'issueEstimationType'
+            InheritEstimation = [bool](Get-LinearNestedValue -InputObject $InputObject -Name 'inheritIssueEstimation')
+            CreatedAt         = $InputObject.createdAt
+            ArchivedAt        = $InputObject.archivedAt
+            ParentId          = Get-LinearNestedValue -InputObject $InputObject -Name 'parent.id'
         }
     }
 }
@@ -145,16 +149,17 @@ function ConvertTo-LinearLabel {
     process {
         if ($null -eq $InputObject) { return }
         [pscustomobject]@{
-            PSTypeName  = 'PSLinear.Label'
-            Id          = $InputObject.id
-            Name        = $InputObject.name
-            Group       = Get-LinearNestedValue -InputObject $InputObject -Name 'parent.name'
-            Team        = Get-LinearNestedValue -InputObject $InputObject -Name 'team.key'
-            Color       = Get-LinearNestedValue -InputObject $InputObject -Name 'color'
-            Description = Get-LinearNestedValue -InputObject $InputObject -Name 'description'
-            IsGroup     = [bool](Get-LinearNestedValue -InputObject $InputObject -Name 'isGroup')
-            RetiredAt   = Get-LinearNestedValue -InputObject $InputObject -Name 'retiredAt'
-            TeamId      = Get-LinearNestedValue -InputObject $InputObject -Name 'team.id'
+            PSTypeName      = 'PSLinear.Label'
+            Id              = $InputObject.id
+            Name            = $InputObject.name
+            Group           = Get-LinearNestedValue -InputObject $InputObject -Name 'parent.name'
+            Team            = Get-LinearNestedValue -InputObject $InputObject -Name 'team.key'
+            Color           = Get-LinearNestedValue -InputObject $InputObject -Name 'color'
+            Description     = Get-LinearNestedValue -InputObject $InputObject -Name 'description'
+            IsGroup         = [bool](Get-LinearNestedValue -InputObject $InputObject -Name 'isGroup')
+            RetiredAt       = Get-LinearNestedValue -InputObject $InputObject -Name 'retiredAt'
+            TeamId          = Get-LinearNestedValue -InputObject $InputObject -Name 'team.id'
+            InheritedFromId = Get-LinearNestedValue -InputObject $InputObject -Name 'inheritedFrom.id'
         }
     }
 }

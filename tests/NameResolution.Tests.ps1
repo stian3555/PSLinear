@@ -97,7 +97,7 @@ Describe 'Name resolution' {
                 Should -Be @('label-bug', 'label-eng-backend', 'label-frontend')
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
                 $filter = (Get-RequestBody $Body).variables.filter
-                $filter.or[0].team.null -eq $true -and $filter.or[1].team.id.eq -eq 'team-eng'
+                $null -ne $filter -and $filter.or[0].team.null -eq $true -and ($filter.or[1].team.id.in -join ',') -eq 'team-eng'
             }
         }
 
@@ -120,6 +120,79 @@ Describe 'Name resolution' {
                 Resolve-LinearLabelId -TeamId 'team-eng' -Label $LabelId
             } | Should -Be $labelId
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
+        }
+    }
+
+    Context 'Labels in sub-teams' {
+        BeforeEach {
+            # WEB is a sub-team of ENG. ENG has Backend and Infra; WEB has inherited copies of the
+            # workspace label Bug and of ENG's Backend, but not of Infra.
+            InModuleScope PSLinear {
+                $script:LinearTeamCache = @(
+                    [pscustomobject]@{ PSTypeName = 'PSLinear.Team'; Id = 'team-eng'; Key = 'ENG'; Name = 'Engineering'; ParentId = $null }
+                    [pscustomobject]@{ PSTypeName = 'PSLinear.Team'; Id = 'team-web'; Key = 'WEB'; Name = 'Web'; ParentId = 'team-eng' }
+                )
+                $script:LinearTeamCacheExpires = [datetime]::UtcNow.AddMinutes(10)
+            }
+            Mock -ModuleName PSLinear Send-LinearHttpRequest {
+                $engTeam = @{ id = 'team-eng'; key = 'ENG' }
+                $webTeam = @{ id = 'team-web'; key = 'WEB' }
+                $teamIds = @((Get-RequestBody -Body $Body).variables.filter.or[1].team.id.in)
+                $all = @(
+                    @{ id = 'label-bug'; name = 'Bug'; team = $null; inheritedFrom = $null }
+                    @{ id = 'label-eng-backend'; name = 'Backend'; team = $engTeam; inheritedFrom = $null }
+                    @{ id = 'label-eng-infra'; name = 'Infra'; team = $engTeam; inheritedFrom = $null }
+                    @{ id = 'label-web-bug'; name = 'Bug'; team = $webTeam; inheritedFrom = @{ id = 'label-bug' } }
+                    @{ id = 'label-web-backend'; name = 'Backend'; team = $webTeam; inheritedFrom = @{ id = 'label-eng-backend' } }
+                )
+                $nodes = foreach ($label in $all) {
+                    if ($null -ne $label.team -and $label.team.id -notin $teamIds) { continue }
+                    $label['isGroup'] = $false
+                    $label['retiredAt'] = $null
+                    $label['parent'] = $null
+                    $label
+                }
+                New-LinearTestResponse -Data @{ issueLabels = New-LinearTestConnection -Nodes @($nodes) }
+            }
+        }
+
+        It 'asks for the labels of the team and its parent teams' {
+            $null = InModuleScope PSLinear { Resolve-LinearLabelId -TeamId 'team-web' -Label 'Infra' }
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                ((Get-RequestBody $Body).variables.filter.or[1].team.id.in -join ',') -eq 'team-web,team-eng'
+            }
+        }
+
+        It 'finds a parent-team label the sub-team has no copy of' {
+            InModuleScope PSLinear { Resolve-LinearLabelId -TeamId 'team-web' -Label 'Infra' } | Should -Be 'label-eng-infra'
+        }
+
+        It 'uses the sub-team''s inherited copy instead of reporting the name as ambiguous' {
+            InModuleScope PSLinear { Resolve-LinearLabelId -TeamId 'team-web' -Label 'Bug', 'Backend' } |
+                Should -Be @('label-web-bug', 'label-web-backend')
+            @(InModuleScope PSLinear { Get-LinearLabelCache -TeamId 'team-web' }).Name | Should -Be @('Backend', 'Bug', 'Infra')
+        }
+
+        It 'leaves the parent team''s own labels alone' {
+            InModuleScope PSLinear { Resolve-LinearLabelId -TeamId 'team-eng' -Label 'Backend', 'Bug' } |
+                Should -Be @('label-eng-backend', 'label-bug')
+        }
+    }
+
+    Context 'Team estimation settings' {
+        It 'knows whether a team uses estimates, following inherited settings' {
+            InModuleScope PSLinear {
+                $script:LinearTeamCache = @(
+                    [pscustomobject]@{ PSTypeName = 'PSLinear.Team'; Id = 'team-eng'; Key = 'ENG'; EstimationType = 'fibonacci'; InheritEstimation = $false; ParentId = $null }
+                    [pscustomobject]@{ PSTypeName = 'PSLinear.Team'; Id = 'team-ops'; Key = 'OPS'; EstimationType = 'notUsed'; InheritEstimation = $false; ParentId = $null }
+                    [pscustomobject]@{ PSTypeName = 'PSLinear.Team'; Id = 'team-web'; Key = 'WEB'; EstimationType = 'notUsed'; InheritEstimation = $true; ParentId = 'team-eng' }
+                    [pscustomobject]@{ PSTypeName = 'PSLinear.Team'; Id = 'team-app'; Key = 'APP'; EstimationType = 'fibonacci'; InheritEstimation = $true; ParentId = 'team-ops' }
+                )
+                $script:LinearTeamCacheExpires = [datetime]::UtcNow.AddMinutes(10)
+                foreach ($teamId in 'team-eng', 'team-ops', 'team-web', 'team-app', 'team-unknown') {
+                    '{0}={1}' -f $teamId, (Test-LinearTeamUsesEstimate -TeamId $teamId)
+                }
+            } | Should -Be @('team-eng=True', 'team-ops=False', 'team-web=True', 'team-app=False', 'team-unknown=True')
         }
     }
 

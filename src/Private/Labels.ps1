@@ -28,8 +28,10 @@ function Get-LinearLabelList {
     .SYNOPSIS
         Fetches the labels that can be applied to issues, sorted by name.
     .DESCRIPTION
-        With -TeamId, returns workspace labels and that team's labels; without it, every label
-        in the workspace. Label groups and retired labels are left out.
+        With -TeamId, returns workspace labels and the labels of that team and its parent teams;
+        a team's inherited copy of a workspace or parent-team label replaces the original, so
+        each name appears once. Without -TeamId, returns every label in the workspace. Label
+        groups and retired labels are left out.
     #>
     [CmdletBinding()]
     [OutputType('PSLinear.Label')]
@@ -42,14 +44,18 @@ function Get-LinearLabelList {
         $variables['filter'] = @{
             or = @(
                 @{ team = @{ null = $true } }
-                @{ team = @{ id = @{ eq = $TeamId } } }
+                @{ team = @{ id = @{ in = @(Get-LinearTeamLineage -TeamId $TeamId) } } }
             )
         }
     }
-    Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListIssueLabels') -ConnectionPath 'issueLabels' -Limit 0 -Variables $variables |
-        ConvertTo-LinearLabel |
-        Where-Object { $null -ne $_ -and -not $_.IsGroup -and $null -eq $_.RetiredAt } |
-        Sort-Object -Property Name
+    $labels = @(Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListIssueLabels') -ConnectionPath 'issueLabels' -Limit 0 -Variables $variables |
+            ConvertTo-LinearLabel |
+            Where-Object { $null -ne $_ -and -not $_.IsGroup -and $null -eq $_.RetiredAt })
+    if ($TeamId) {
+        $replaced = @($labels | ForEach-Object InheritedFromId | Where-Object { $_ })
+        $labels = @($labels | Where-Object { $_.Id -notin $replaced })
+    }
+    $labels | Sort-Object -Property Name
 }
 
 function Resolve-LinearLabelId {

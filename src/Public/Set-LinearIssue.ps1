@@ -61,7 +61,8 @@ function Set-LinearIssue {
         Project name or id.
 
     .PARAMETER Estimate
-        The estimate, in the team's estimation scale (for example story points).
+        The estimate, in the team's estimation scale (for example story points). Linear ignores
+        it in teams that do not use estimates, and the command warns when that is the case.
 
     .PARAMETER DueDate
         The due date. Only the date part is used.
@@ -214,8 +215,8 @@ function Set-LinearIssue {
             $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message $invalidMessage -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument))
         }
 
-        # Workflow states and labels belong to a team, so these need the issue's team id.
-        $needsTeamId = [bool]($State -or $Label -or $AddLabel -or $RemoveLabel)
+        # Workflow states, labels and estimation settings belong to a team, so these need the issue's team id.
+        $needsTeamId = [bool]($State -or $Label -or $AddLabel -or $RemoveLabel -or $PSBoundParameters.ContainsKey('Estimate'))
         $updateQuery = Get-LinearGraphQLDocument -Name 'UpdateIssue'
     }
 
@@ -260,7 +261,12 @@ function Set-LinearIssue {
                 if ($AddLabel) { $issueInput['addedLabelIds'] = @(Resolve-LinearLabelId -TeamId $teamId -Label $AddLabel) }
                 if ($RemoveLabel) { $issueInput['removedLabelIds'] = @(Resolve-LinearLabelId -TeamId $teamId -Label $RemoveLabel) }
                 if ($Project) { $issueInput['projectId'] = Resolve-LinearProjectId -Project $Project }
-                if ($PSBoundParameters.ContainsKey('Estimate')) { $issueInput['estimate'] = $Estimate }
+                if ($PSBoundParameters.ContainsKey('Estimate')) {
+                    if (-not (Test-LinearTeamUsesEstimate -TeamId $teamId)) {
+                        Write-Warning "Team $(Get-LinearTeamKey -TeamId $teamId) does not use estimates, so Linear ignores -Estimate. Turn on estimates in the team's settings to use it."
+                    }
+                    $issueInput['estimate'] = $Estimate
+                }
                 if ($PSBoundParameters.ContainsKey('DueDate')) { $issueInput['dueDate'] = ConvertTo-LinearTimelessDate -Date $DueDate }
                 if ($Parent) { $issueInput['parentId'] = ConvertTo-LinearIssueIdentifier -Value $Parent }
                 foreach ($field in $Clear) {

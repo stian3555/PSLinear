@@ -4,6 +4,21 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `New-LinearIssue` and `Set-LinearIssue` warn when `-Estimate` is used in a team that does not
+  use estimates, because Linear ignores the value there.
+- `Get-LinearTeam` output includes the parent team (`Parent`, `ParentId`) and the team's
+  estimation settings (`EstimationType`, `InheritEstimation`).
+
+### Fixed
+
+- Labels in sub-teams: labels of parent teams can be used, and a sub-team's inherited copy of
+  a workspace or parent-team label is used instead of the original, so the name is no longer
+  reported as ambiguous.
+
 ## [0.1.0-preview1] - 2026-10-17
 
 ### Added
@@ -38,4 +53,5 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - Formatting views for issues, teams, users, workflow states, labels, projects, cycles, the
   connection and rate-limit status.
 
+[Unreleased]: https://github.com/stian3555/PSLinear/compare/v0.1.0-preview1...HEAD
 [0.1.0-preview1]: https://github.com/stian3555/PSLinear/releases/tag/v0.1.0-preview1
