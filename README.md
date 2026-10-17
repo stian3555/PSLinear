@@ -181,6 +181,10 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { 
 | `Get-LinearProject` | Projects with status, lead, target date and progress. |
 | `Get-LinearCycle` | Cycles per team, with `-Active`, `-Next`, `-Previous` and `-Number`. |
 | `Get-LinearTemplate` | Issue, project and document templates, optionally those a team can use. |
+| `Get-LinearMilestone` | Milestones of a project, or of every project, with status, target date and progress. |
+| `New-LinearMilestone` | Create a project milestone. |
+| `Set-LinearMilestone` | Rename, reschedule, reorder or move milestones. |
+| `Remove-LinearMilestone` | Delete milestones; their issues stay in the project. |
 | `Get-LinearIssue` | Issues by identifier or URL, or filtered lists with paging. |
 | `New-LinearIssue` | Create an issue, with states, labels, projects, milestones, cycles, users and templates given by name. |
 | `Set-LinearIssue` | Change issues: state, assignee, labels (replace, add or remove), priority and more, or clear values with `-Clear`. |
@@ -263,7 +267,6 @@ publish. A mistake means a new version, not a re-tag.
 
 ## Roadmap
 
-- Milestones
 - Tab completion for `-State`, `-Label` and `-Assignee`
 - Markdown help with platyPS and an online help URI
 

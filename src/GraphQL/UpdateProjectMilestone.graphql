@@ -1,0 +1,8 @@
+mutation UpdateProjectMilestone($id: String!, $input: ProjectMilestoneUpdateInput!) {
+  projectMilestoneUpdate(id: $id, input: $input) {
+    success
+    projectMilestone {
+      ...ProjectMilestoneFields
+    }
+  }
+}

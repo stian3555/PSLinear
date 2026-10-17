@@ -256,7 +256,8 @@ function Get-LinearTestLookupResponse {
     }
 
     if ($query -match 'query ListProjectMilestones') {
-        $projectId = $variables.filter.project.id.eq
+        # Without a filter, every milestone in the workspace.
+        $projectId = if ($variables.ContainsKey('filter')) { $variables.filter.project.id.eq } else { 'project-web' }
         $nodes = if ($projectId -eq 'project-web') {
             @(
                 @{ id = 'milestone-beta'; name = 'Beta'; description = $null; targetDate = '2026-12-01'; status = 'next'; progress = 0.1; sortOrder = 2; project = @{ id = 'project-web'; name = 'Website' } }
@@ -265,6 +266,41 @@ function Get-LinearTestLookupResponse {
         }
         else { @() }
         return New-LinearTestResponse -Data @{ projectMilestones = New-LinearTestConnection -Nodes $nodes }
+    }
+
+    if ($query -match 'query GetProjectMilestone|mutation (Create|Update|Delete)ProjectMilestone') {
+        # Milestone writes: the id 'missing' does not exist, and the name 'reject' is rejected.
+        $milestoneError = New-LinearTestError -Message 'Entity not found: ProjectMilestone' -Code 'INPUT_ERROR'
+        $newMilestone = {
+            param($Id, $Name, $ProjectId, $TargetDate, $Description)
+            @{
+                id = $Id; name = $Name; description = $Description; targetDate = $TargetDate; status = 'unstarted'; progress = 0; sortOrder = 3
+                project = @{ id = $ProjectId; name = $(if ($ProjectId -eq 'project-mobile') { 'Mobile App' } else { 'Website' }) }
+            }
+        }
+        if ($query -match 'query GetProjectMilestone') {
+            if ($variables.id -eq 'missing') { return New-LinearTestResponse -Data $null -Errors @($milestoneError) }
+            return New-LinearTestResponse -Data @{ projectMilestone = (& $newMilestone $variables.id 'Beta' 'project-web' '2026-12-01' $null) }
+        }
+        if ($query -match 'mutation CreateProjectMilestone') {
+            $milestoneInput = $variables.input
+            if ($milestoneInput['name'] -eq 'reject') {
+                return New-LinearTestResponse -Data @{ projectMilestoneCreate = $null } -Errors @(New-LinearTestError -Message 'Argument Validation Error' -Code 'INPUT_ERROR')
+            }
+            $node = & $newMilestone 'milestone-new' $milestoneInput['name'] $milestoneInput['projectId'] $milestoneInput['targetDate'] $milestoneInput['description']
+            return New-LinearTestResponse -Data @{ projectMilestoneCreate = @{ success = $true; projectMilestone = $node } }
+        }
+        if ($query -match 'mutation UpdateProjectMilestone') {
+            if ($variables.id -eq 'missing') { return New-LinearTestResponse -Data @{ projectMilestoneUpdate = $null } -Errors @($milestoneError) }
+            $milestoneInput = $variables.input
+            $name = if ($milestoneInput.Contains('name')) { $milestoneInput['name'] } else { 'Beta' }
+            $projectId = if ($milestoneInput.Contains('projectId')) { $milestoneInput['projectId'] } else { 'project-web' }
+            $targetDate = if ($milestoneInput.Contains('targetDate')) { $milestoneInput['targetDate'] } else { '2026-12-01' }
+            $node = & $newMilestone $variables.id $name $projectId $targetDate $milestoneInput['description']
+            return New-LinearTestResponse -Data @{ projectMilestoneUpdate = @{ success = $true; projectMilestone = $node } }
+        }
+        if ($variables.id -eq 'missing') { return New-LinearTestResponse -Data @{ projectMilestoneDelete = $null } -Errors @($milestoneError) }
+        return New-LinearTestResponse -Data @{ projectMilestoneDelete = @{ success = $true; entityId = $variables.id } }
     }
 
     if ($query -match 'query ListTemplates') {

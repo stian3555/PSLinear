@@ -21,6 +21,7 @@
         'Get-LinearIssue'
         'Get-LinearIssueRelation'
         'Get-LinearLabel'
+        'Get-LinearMilestone'
         'Get-LinearProject'
         'Get-LinearRateLimit'
         'Get-LinearTeam'
@@ -30,13 +31,16 @@
         'Get-LinearWorkflowState'
         'Invoke-LinearGraphQL'
         'New-LinearIssue'
+        'New-LinearMilestone'
         'Remove-LinearAttachment'
         'Remove-LinearComment'
         'Remove-LinearIssue'
         'Remove-LinearIssueRelation'
+        'Remove-LinearMilestone'
         'Set-LinearAttachment'
         'Set-LinearComment'
         'Set-LinearIssue'
+        'Set-LinearMilestone'
     )
     CmdletsToExport      = @()
     VariablesToExport    = @()

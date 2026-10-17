@@ -1,0 +1,5 @@
+query GetProjectMilestone($id: String!) {
+  projectMilestone(id: $id) {
+    ...ProjectMilestoneFields
+  }
+}
