@@ -136,7 +136,12 @@ function Get-LinearTestLookupResponse {
     #           ENG Backend; OPS Incident and a second Frontend
     # Users:    Ada Lovelace (the viewer), Grace Hopper, two users named Alex Smith, and the
     #           disabled Old Timer (only with includeDisabled)
-    # Projects: Website, Mobile App, and the archived Legacy (only with includeArchived)
+    # Projects: Website (ENG, In Progress, lead Grace, label Customer), Mobile App (ENG and OPS,
+    #           Planned), and the archived Legacy (only with includeArchived)
+    # Project statuses: Backlog, Planned, In Progress and Beta testing (both started), Paused,
+    #           Completed, Canceled
+    # Project labels: Customer, Infrastructure, group Theme with Growth, a second Growth (ENG),
+    #           retired Old
     # Cycles:   ENG 10 (past), 11 (previous), 12 (active), 13 (next, named 'Release sprint'); OPS 3 (active)
     # Milestones: Website has Alpha and Beta; Mobile App has none
     # Templates: issue templates 'Bug report' (workspace and ENG's own) and 'Incident' (OPS),
@@ -235,23 +240,38 @@ function Get-LinearTestLookupResponse {
         }
     }
 
-    if ($query -match 'query ListProjects') {
-        $projects = @(
-            @{
-                id = 'project-web'; name = 'Website'; slugId = 'a1b2c3d4e5f6'; url = 'https://linear.app/acme/project/website-a1b2c3d4e5f6'; status = @{ name = 'In Progress' }
-                lead = @{ id = 'user-grace'; name = 'Grace Hopper' }; progress = 0.5; startDate = '2026-09-01'; targetDate = '2026-12-01'; archivedAt = $null
-            }
-            @{
-                id = 'project-mobile'; name = 'Mobile App'; slugId = 'f6e5d4c3b2a1'; url = 'https://linear.app/acme/project/mobile-app-f6e5d4c3b2a1'; status = @{ name = 'Planned' }
-                lead = $null; progress = 0; startDate = $null; targetDate = $null; archivedAt = $null
-            }
-        )
-        if ($variables.includeArchived -eq $true) {
-            $projects += @{
-                id = 'project-legacy'; name = 'Legacy'; slugId = '0a0b0c0d0e0f'; url = 'https://linear.app/acme/project/legacy-0a0b0c0d0e0f'; status = @{ name = 'Completed' }
-                lead = $null; progress = 1; startDate = $null; targetDate = $null; archivedAt = '2026-01-01T00:00:00.000Z'
-            }
+    if ($query -match 'query ListProjectStatuses') {
+        # Deliberately not in workflow order, so sorting is tested.
+        return New-LinearTestResponse -Data @{
+            projectStatuses = New-LinearTestConnection -Nodes @(
+                @{ id = 'pstatus-completed'; name = 'Completed'; type = 'completed'; position = 5 }
+                @{ id = 'pstatus-beta'; name = 'Beta testing'; type = 'started'; position = 3 }
+                @{ id = 'pstatus-backlog'; name = 'Backlog'; type = 'backlog'; position = 0 }
+                @{ id = 'pstatus-progress'; name = 'In Progress'; type = 'started'; position = 2 }
+                @{ id = 'pstatus-canceled'; name = 'Canceled'; type = 'canceled'; position = 6 }
+                @{ id = 'pstatus-planned'; name = 'Planned'; type = 'planned'; position = 1 }
+                @{ id = 'pstatus-paused'; name = 'Paused'; type = 'paused'; position = 4 }
+            )
         }
+    }
+
+    if ($query -match 'query ListProjectLabels') {
+        $themeGroup = @{ name = 'Theme' }
+        return New-LinearTestResponse -Data @{
+            projectLabels = New-LinearTestConnection -Nodes @(
+                @{ id = 'plabel-infra'; name = 'Infrastructure'; isGroup = $false; retiredAt = $null; parent = $null; team = $null }
+                @{ id = 'plabel-customer'; name = 'Customer'; isGroup = $false; retiredAt = $null; parent = $null; team = $null }
+                @{ id = 'plabel-theme'; name = 'Theme'; isGroup = $true; retiredAt = $null; parent = $null; team = $null }
+                @{ id = 'plabel-growth'; name = 'Growth'; isGroup = $false; retiredAt = $null; parent = $themeGroup; team = $null }
+                @{ id = 'plabel-eng-growth'; name = 'Growth'; isGroup = $false; retiredAt = $null; parent = $null; team = @{ id = 'team-eng'; key = 'ENG' } }
+                @{ id = 'plabel-old'; name = 'Old'; isGroup = $false; retiredAt = '2026-01-01T00:00:00.000Z'; parent = $null; team = $null }
+            )
+        }
+    }
+
+    if ($query -match 'query ListProjects\b') {
+        $projects = @((New-LinearTestProjectNode -Id 'project-web'), (New-LinearTestProjectNode -Id 'project-mobile'))
+        if ($variables.includeArchived -eq $true) { $projects += New-LinearTestProjectNode -Id 'project-legacy' }
         return New-LinearTestResponse -Data @{ projects = New-LinearTestConnection -Nodes $projects }
     }
 
@@ -651,4 +671,201 @@ function Get-LinearTestRelationResponse {
         return New-LinearTestResponse -Data @{ issueRelationDelete = @{ success = $true; entityId = $variables.id } }
     }
     $null
+}
+
+function New-LinearTestProjectNode {
+    # Returns one of the fixture projects (project-web, project-mobile, project-legacy) as Linear
+    # sends it. -Detail adds the fields of GetProject: content, every team and label, members and
+    # initiatives. -Change applies a ProjectCreateInput or ProjectUpdateInput hashtable to it.
+    param(
+        [Parameter(Mandatory)][string] $Id,
+        [switch] $Detail,
+        [System.Collections.IDictionary] $Change = @{}
+    )
+    $teams = @{ 'team-eng' = @{ id = 'team-eng'; key = 'ENG' }; 'team-ops' = @{ id = 'team-ops'; key = 'OPS' } }
+    $statuses = @{
+        'pstatus-backlog'   = @{ id = 'pstatus-backlog'; name = 'Backlog'; type = 'backlog' }
+        'pstatus-planned'   = @{ id = 'pstatus-planned'; name = 'Planned'; type = 'planned' }
+        'pstatus-progress'  = @{ id = 'pstatus-progress'; name = 'In Progress'; type = 'started' }
+        'pstatus-beta'      = @{ id = 'pstatus-beta'; name = 'Beta testing'; type = 'started' }
+        'pstatus-paused'    = @{ id = 'pstatus-paused'; name = 'Paused'; type = 'paused' }
+        'pstatus-completed' = @{ id = 'pstatus-completed'; name = 'Completed'; type = 'completed' }
+        'pstatus-canceled'  = @{ id = 'pstatus-canceled'; name = 'Canceled'; type = 'canceled' }
+    }
+    $users = @{ 'user-ada' = @{ id = 'user-ada'; name = 'Ada Lovelace' }; 'user-grace' = @{ id = 'user-grace'; name = 'Grace Hopper' } }
+    $labels = @{
+        'plabel-customer'   = @{ id = 'plabel-customer'; name = 'Customer' }
+        'plabel-infra'      = @{ id = 'plabel-infra'; name = 'Infrastructure' }
+        'plabel-growth'     = @{ id = 'plabel-growth'; name = 'Growth' }
+        'plabel-eng-growth' = @{ id = 'plabel-eng-growth'; name = 'Growth' }
+    }
+
+    $values = switch ($Id) {
+        'project-web' {
+            @{ name = 'Website'; slugId = 'a1b2c3d4e5f6'; statusId = 'pstatus-progress'; leadId = 'user-grace'; teamIds = @('team-eng'); labelIds = @('plabel-customer')
+                memberIds = @('user-ada', 'user-grace'); health = 'onTrack'; priority = 2; progress = 0.5; startDate = '2026-09-01'; targetDate = '2026-12-01'
+                description = 'The public site'; content = "# Website`nRelaunch plan"; archivedAt = $null; initiatives = @('Growth')
+            }
+        }
+        'project-mobile' {
+            @{ name = 'Mobile App'; slugId = 'f6e5d4c3b2a1'; statusId = 'pstatus-planned'; leadId = $null; teamIds = @('team-eng', 'team-ops'); labelIds = @()
+                memberIds = @(); health = $null; priority = 0; progress = 0; startDate = $null; targetDate = $null
+                description = ''; content = ''; archivedAt = $null; initiatives = @()
+            }
+        }
+        'project-legacy' {
+            @{ name = 'Legacy'; slugId = '0a0b0c0d0e0f'; statusId = 'pstatus-completed'; leadId = $null; teamIds = @('team-eng'); labelIds = @()
+                memberIds = @(); health = $null; priority = 0; progress = 1; startDate = $null; targetDate = $null
+                description = ''; content = ''; archivedAt = '2026-01-01T00:00:00.000Z'; initiatives = @()
+            }
+        }
+        default {
+            @{ name = 'New project'; slugId = '123456abcdef'; statusId = 'pstatus-backlog'; leadId = $null; teamIds = @('team-eng'); labelIds = @()
+                memberIds = @(); health = $null; priority = 0; progress = 0; startDate = $null; targetDate = $null
+                description = ''; content = ''; archivedAt = $null; initiatives = @()
+            }
+        }
+    }
+    foreach ($key in $Change.Keys) { $values[$key] = $Change[$key] }
+
+    $slug = ($values.name.ToLowerInvariant() -replace '[^a-z0-9]+', '-').Trim('-')
+    $teamNodes = @(foreach ($teamId in $values.teamIds) { $teams[$teamId] })
+    $labelNodes = @(foreach ($labelId in $values.labelIds) { $labels[$labelId] })
+    $node = [ordered]@{
+        id            = $Id
+        name          = $values.name
+        slugId        = $values.slugId
+        url           = "https://linear.app/acme/project/$slug-$($values.slugId)"
+        description   = $values.description
+        priority      = $values.priority
+        priorityLabel = @('No priority', 'Urgent', 'High', 'Medium', 'Low')[$values.priority]
+        health        = $values.health
+        progress      = $values.progress
+        startDate     = $values.startDate
+        targetDate    = $values.targetDate
+        startedAt     = $null
+        completedAt   = $null
+        canceledAt    = $null
+        archivedAt    = $values.archivedAt
+        status        = $statuses[$values.statusId]
+        lead          = if ($values.leadId) { $users[$values.leadId] } else { $null }
+        teams         = @{ nodes = $teamNodes }
+        labels        = @{ nodes = $labelNodes }
+    }
+    if ($Detail) {
+        $node['content'] = $values.content
+        $node['allTeams'] = @{ nodes = $teamNodes }
+        $node['allLabels'] = @{ nodes = $labelNodes }
+        $node['members'] = @{ nodes = @(foreach ($userId in $values.memberIds) { $users[$userId] }) }
+        $node['initiatives'] = @{ nodes = @(foreach ($initiative in $values.initiatives) { @{ id = "initiative-$($initiative.ToLowerInvariant())"; name = $initiative } }) }
+    }
+    $node
+}
+
+function New-LinearTestProjectUpdateNode {
+    param(
+        [string] $Id = 'update-1',
+        [string] $Body = 'All good',
+        [string] $Health = 'onTrack',
+        [string] $ProjectId = 'project-web',
+        [string] $CreatedAt = '2026-10-01T09:00:00.000Z'
+    )
+    [ordered]@{
+        id        = $Id
+        body      = $Body
+        health    = if ($Health) { $Health } else { $null }
+        url       = "https://linear.app/acme/project/website-a1b2c3d4e5f6/updates#$Id"
+        createdAt = $CreatedAt
+        editedAt  = $null
+        user      = @{ id = 'user-ada'; name = 'Ada Lovelace' }
+        project   = @{ id = $ProjectId; name = $(if ($ProjectId -eq 'project-mobile') { 'Mobile App' } else { 'Website' }) }
+    }
+}
+
+function Get-LinearTestProjectResponse {
+    # Serves the project and project update operations, or returns $null for any other request.
+    #
+    # GetProject:    project-web, project-mobile and project-legacy, by id or slug id; anything
+    #                else does not exist.
+    # Create/Update: the name 'reject' is rejected; updating or deleting 'project-missing' fails.
+    # Updates:       Website has update-2 (AtRisk, newest) and update-1 (OnTrack); Mobile App has
+    #                update-m1 (no health). The update id 'missing' does not exist, and the body
+    #                'reject' is rejected.
+    param([Parameter(Mandatory)][hashtable] $Request)
+
+    $query = $Request.query
+    $variables = if ($Request.ContainsKey('variables')) { $Request.variables } else { @{} }
+    $slugs = @{ 'a1b2c3d4e5f6' = 'project-web'; 'f6e5d4c3b2a1' = 'project-mobile'; '0a0b0c0d0e0f' = 'project-legacy' }
+    $known = @('project-web', 'project-mobile', 'project-legacy')
+    $updates = [ordered]@{
+        'update-2'  = New-LinearTestProjectUpdateNode -Id 'update-2' -Body "Slipping`nWaiting on design" -Health 'atRisk' -CreatedAt '2026-10-08T09:00:00.000Z'
+        'update-1'  = New-LinearTestProjectUpdateNode -Id 'update-1' -Body 'All good' -Health 'onTrack' -CreatedAt '2026-10-01T09:00:00.000Z'
+        'update-m1' = New-LinearTestProjectUpdateNode -Id 'update-m1' -Body 'Kickoff' -Health '' -ProjectId 'project-mobile' -CreatedAt '2026-09-20T09:00:00.000Z'
+    }
+    $rejected = New-LinearTestError -Message 'Argument Validation Error' -Code 'INPUT_ERROR'
+
+    if ($query -match 'query GetProject\b') {
+        $projectId = if ($slugs.ContainsKey($variables.id)) { $slugs[$variables.id] } else { $variables.id }
+        if ($projectId -notin $known) {
+            return New-LinearTestResponse -Data $null -Errors @(New-LinearTestError -Message 'Entity not found: Project' -Code 'INPUT_ERROR' -Path 'project')
+        }
+        return New-LinearTestResponse -Data @{ project = New-LinearTestProjectNode -Id $projectId -Detail }
+    }
+    if ($query -match 'mutation CreateProject\b') {
+        $projectInput = $variables.input
+        if ($projectInput['name'] -eq 'reject') { return New-LinearTestResponse -Data @{ projectCreate = $null } -Errors @($rejected) }
+        return New-LinearTestResponse -Data @{ projectCreate = @{ success = $true; project = New-LinearTestProjectNode -Id 'project-new' -Change $projectInput } }
+    }
+    if ($query -match 'mutation UpdateProject\b') {
+        $projectInput = $variables.input
+        if ($variables.id -notin $known -or $projectInput['name'] -eq 'reject') {
+            return New-LinearTestResponse -Data @{ projectUpdate = $null } -Errors @($rejected)
+        }
+        return New-LinearTestResponse -Data @{ projectUpdate = @{ success = $true; project = New-LinearTestProjectNode -Id $variables.id -Change $projectInput } }
+    }
+    if ($query -match 'mutation DeleteProject\b') {
+        if ($variables.id -notin $known) { return New-LinearTestResponse -Data @{ projectDelete = $null } -Errors @($rejected) }
+        return New-LinearTestResponse -Data @{ projectDelete = @{ success = $true } }
+    }
+
+    if ($query -match 'query ListProjectUpdates') {
+        $projectId = Get-LinearNestedTestValue -InputObject $variables -Path 'filter.project.id.eq'
+        $nodes = @($updates.Values | Where-Object { -not $projectId -or $_.project.id -eq $projectId })
+        return New-LinearTestResponse -Data @{ projectUpdates = New-LinearTestConnection -Nodes $nodes }
+    }
+    if ($query -match 'query GetProjectUpdate') {
+        if (-not $updates.Contains($variables.id)) {
+            return New-LinearTestResponse -Data $null -Errors @(New-LinearTestError -Message 'Entity not found: ProjectUpdate' -Code 'INPUT_ERROR')
+        }
+        return New-LinearTestResponse -Data @{ projectUpdate = $updates[$variables.id] }
+    }
+    if ($query -match 'mutation CreateProjectUpdate') {
+        $updateInput = $variables.input
+        if ($updateInput['body'] -eq 'reject') { return New-LinearTestResponse -Data @{ projectUpdateCreate = $null } -Errors @($rejected) }
+        $node = New-LinearTestProjectUpdateNode -Id 'update-new' -Body $updateInput['body'] -Health $updateInput['health'] -ProjectId $updateInput['projectId'] -CreatedAt '2026-10-17T09:00:00.000Z'
+        return New-LinearTestResponse -Data @{ projectUpdateCreate = @{ success = $true; projectUpdate = $node } }
+    }
+    if ($query -match 'mutation UpdateProjectUpdate') {
+        if (-not $updates.Contains($variables.id)) { return New-LinearTestResponse -Data @{ projectUpdateUpdate = $null } -Errors @($rejected) }
+        $node = $updates[$variables.id]
+        foreach ($key in $variables.input.Keys) { $node[$key] = $variables.input[$key] }
+        $node['editedAt'] = '2026-10-17T10:00:00.000Z'
+        return New-LinearTestResponse -Data @{ projectUpdateUpdate = @{ success = $true; projectUpdate = $node } }
+    }
+    if ($query -match 'mutation ArchiveProjectUpdate') {
+        if (-not $updates.Contains($variables.id)) { return New-LinearTestResponse -Data @{ projectUpdateArchive = $null } -Errors @($rejected) }
+        return New-LinearTestResponse -Data @{ projectUpdateArchive = @{ success = $true } }
+    }
+    $null
+}
+
+function Get-LinearNestedTestValue {
+    # Reads a dot path from nested hashtables, or returns $null when any part is missing (strict-mode safe).
+    param([AllowNull()][object] $InputObject, [Parameter(Mandatory)][string] $Path)
+    $current = $InputObject
+    foreach ($segment in $Path.Split('.')) {
+        if ($current -isnot [System.Collections.IDictionary] -or -not $current.Contains($segment)) { return $null }
+        $current = $current[$segment]
+    }
+    $current
 }

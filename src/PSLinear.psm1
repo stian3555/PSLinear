@@ -20,6 +20,10 @@ $script:LinearCycleCache = @{}
 $script:LinearMilestoneCache = @{}
 $script:LinearTemplateCache = $null
 $script:LinearTemplateCacheExpires = [datetime]::MinValue
+$script:LinearProjectStatusCache = $null
+$script:LinearProjectStatusCacheExpires = [datetime]::MinValue
+$script:LinearProjectLabelCache = $null
+$script:LinearProjectLabelCacheExpires = [datetime]::MinValue
 $script:LinearDocumentCache = @{}
 
 $script:ModuleVersion = $ExecutionContext.SessionState.Module.Version
@@ -40,6 +44,23 @@ $script:WorkflowStateTypeOrder = @{
     completed = 4
     canceled  = 5
     duplicate = 6
+}
+
+# Project status categories in the order Linear shows them.
+$script:ProjectStatusTypeOrder = @{
+    backlog   = 0
+    planned   = 1
+    started   = 2
+    paused    = 3
+    completed = 4
+    canceled  = 5
+}
+
+# Health values of project and initiative updates, as the API spells them.
+$script:HealthMap = @{
+    OnTrack  = 'onTrack'
+    AtRisk   = 'atRisk'
+    OffTrack = 'offTrack'
 }
 
 # Linear priority values (0-4) and their labels.
@@ -93,5 +114,11 @@ $teamCompleter = {
         Write-Debug "Team completion failed: $($_.Exception.Message)"
     }
 }
-$teamCommands = 'Get-LinearCycle', 'Get-LinearIssue', 'Get-LinearLabel', 'Get-LinearTemplate', 'Get-LinearWorkflowState', 'New-LinearIssue', 'Set-LinearIssue'
+$teamCommands = @(
+    'Get-LinearCycle', 'Get-LinearIssue', 'Get-LinearLabel', 'Get-LinearProject', 'Get-LinearTemplate', 'Get-LinearWorkflowState'
+    'New-LinearIssue', 'New-LinearProject', 'Set-LinearIssue', 'Set-LinearProject'
+)
 Register-ArgumentCompleter -CommandName $teamCommands -ParameterName 'Team' -ScriptBlock $teamCompleter
+foreach ($parameterName in 'AddTeam', 'RemoveTeam') {
+    Register-ArgumentCompleter -CommandName 'Set-LinearProject' -ParameterName $parameterName -ScriptBlock $teamCompleter
+}

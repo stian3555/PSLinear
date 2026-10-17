@@ -1,0 +1,5 @@
+query GetProjectUpdate($id: String!) {
+  projectUpdate(id: $id) {
+    ...ProjectUpdateFields
+  }
+}

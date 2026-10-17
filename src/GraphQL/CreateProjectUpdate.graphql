@@ -1,0 +1,8 @@
+mutation CreateProjectUpdate($input: ProjectUpdateCreateInput!) {
+  projectUpdateCreate(input: $input) {
+    success
+    projectUpdate {
+      ...ProjectUpdateFields
+    }
+  }
+}

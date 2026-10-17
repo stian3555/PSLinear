@@ -1,0 +1,21 @@
+query ListProjectLabels($first: Int, $after: String) {
+  projectLabels(first: $first, after: $after) {
+    nodes {
+      id
+      name
+      isGroup
+      retiredAt
+      parent {
+        name
+      }
+      team {
+        id
+        key
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

@@ -1,0 +1,11 @@
+query ListProjectUpdates($filter: ProjectUpdateFilter, $first: Int, $after: String) {
+  projectUpdates(filter: $filter, first: $first, after: $after) {
+    nodes {
+      ...ProjectUpdateFields
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

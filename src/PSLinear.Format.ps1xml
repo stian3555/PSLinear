@@ -291,6 +291,10 @@
             <Width>12</Width>
           </TableColumnHeader>
           <TableColumnHeader>
+            <Label>Health</Label>
+            <Width>8</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
             <Label>Lead</Label>
             <Width>20</Width>
           </TableColumnHeader>
@@ -311,6 +315,9 @@
               </TableColumnItem>
               <TableColumnItem>
                 <PropertyName>Status</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <PropertyName>Health</PropertyName>
               </TableColumnItem>
               <TableColumnItem>
                 <PropertyName>Lead</PropertyName>
@@ -622,6 +629,56 @@
               </TableColumnItem>
               <TableColumnItem>
                 <ScriptBlock>if ($null -ne $_.Progress) { '{0:P0}' -f $_.Progress }</ScriptBlock>
+              </TableColumnItem>
+            </TableColumnItems>
+          </TableRowEntry>
+        </TableRowEntries>
+      </TableControl>
+    </View>
+    <View>
+      <Name>PSLinear.ProjectUpdate</Name>
+      <ViewSelectedBy>
+        <TypeName>PSLinear.ProjectUpdate</TypeName>
+      </ViewSelectedBy>
+      <TableControl>
+        <TableHeaders>
+          <TableColumnHeader>
+            <Label>CreatedAt</Label>
+            <Width>16</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Project</Label>
+            <Width>24</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Health</Label>
+            <Width>8</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Author</Label>
+            <Width>18</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Body</Label>
+          </TableColumnHeader>
+        </TableHeaders>
+        <TableRowEntries>
+          <TableRowEntry>
+            <TableColumnItems>
+              <TableColumnItem>
+                <ScriptBlock>if ($_.CreatedAt) { ([datetime]$_.CreatedAt).ToLocalTime().ToString('yyyy-MM-dd HH:mm') }</ScriptBlock>
+              </TableColumnItem>
+              <TableColumnItem>
+                <PropertyName>Project</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <PropertyName>Health</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <PropertyName>Author</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <ScriptBlock>if ($_.Body) { ($_.Body -split '\r?\n')[0] }</ScriptBlock>
               </TableColumnItem>
             </TableColumnItems>
           </TableRowEntry>
