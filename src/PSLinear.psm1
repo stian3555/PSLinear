@@ -120,8 +120,8 @@ $teamCompleter = {
     }
 }
 $teamCommands = @(
-    'Get-LinearCycle', 'Get-LinearIssue', 'Get-LinearLabel', 'Get-LinearProject', 'Get-LinearTemplate', 'Get-LinearWorkflowState'
-    'New-LinearIssue', 'New-LinearProject', 'Set-LinearIssue', 'Set-LinearProject'
+    'Get-LinearCycle', 'Get-LinearDocument', 'Get-LinearIssue', 'Get-LinearLabel', 'Get-LinearProject', 'Get-LinearTemplate', 'Get-LinearWorkflowState'
+    'New-LinearDocument', 'New-LinearIssue', 'New-LinearProject', 'Set-LinearDocument', 'Set-LinearIssue', 'Set-LinearProject'
 )
 Register-ArgumentCompleter -CommandName $teamCommands -ParameterName 'Team' -ScriptBlock $teamCompleter
 foreach ($parameterName in 'AddTeam', 'RemoveTeam') {

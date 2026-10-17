@@ -438,6 +438,7 @@ function New-LinearTestCommentNode {
         [string] $Issue = 'ENG-1',
         [string] $ProjectId,
         [string] $InitiativeId,
+        [string] $DocumentId,
         [string] $CreatedAt = '2026-10-10T10:00:00.000Z',
         [string] $ResolvedAt
     )
@@ -455,9 +456,10 @@ function New-LinearTestCommentNode {
         botActor      = if ($Bot) { @{ name = $Bot; type = 'github' } } else { $null }
         externalUser  = $null
         resolvingUser = if ($ResolvedAt) { @{ id = 'user-ada'; name = 'Ada Lovelace' } } else { $null }
-        issue         = if ($ProjectId -or $InitiativeId) { $null } else { @{ id = "issue-$Issue"; identifier = $Issue } }
+        issue         = if ($ProjectId -or $InitiativeId -or $DocumentId) { $null } else { @{ id = "issue-$Issue"; identifier = $Issue } }
         project       = if ($ProjectId) { @{ id = $ProjectId; name = 'Website' } } else { $null }
         initiative    = if ($InitiativeId) { @{ id = $InitiativeId; name = 'Q1 growth' } } else { $null }
+        documentContent = if ($DocumentId) { @{ id = "content-$($DocumentId -replace '^doc-')"; document = @{ id = $DocumentId; title = 'Launch plan' } } } else { $null }
     }
 }
 
@@ -511,8 +513,9 @@ function Get-LinearTestCommentResponse {
             return New-LinearTestResponse -Data @{ commentCreate = $null } -Errors @(New-LinearTestError -Message 'Argument Validation Error' -Code 'INPUT_ERROR')
         }
         $issueValue = if ($commentInput['issueId']) { $commentInput['issueId'] -replace '^issue-', '' } else { 'ENG-1' }
+        $documentId = if ($commentInput['documentContentId']) { $commentInput['documentContentId'] -replace '^content-', 'doc-' } else { $null }
         $node = New-LinearTestCommentNode -Id 'comment-new' -Body $commentInput['body'] -ParentId $commentInput['parentId'] -Issue $issueValue `
-            -ProjectId $commentInput['projectId'] -InitiativeId $commentInput['initiativeId']
+            -ProjectId $commentInput['projectId'] -InitiativeId $commentInput['initiativeId'] -DocumentId $documentId
         return New-LinearTestResponse -Data @{ commentCreate = @{ success = $true; comment = $node } }
     }
     if ($query -match 'mutation UpdateComment') {
@@ -1096,6 +1099,135 @@ function Get-LinearTestInitiativeResponse {
     if ($query -match 'mutation ArchiveInitiativeUpdate') {
         if (-not $updates.Contains($variables.id)) { return New-LinearTestResponse -Data @{ initiativeUpdateArchive = $null } -Errors @($rejected) }
         return New-LinearTestResponse -Data @{ initiativeUpdateArchive = @{ success = $true } }
+    }
+    $null
+}
+
+function New-LinearTestDocumentNode {
+    # Returns one of the fixture documents (doc-plan, doc-notes, doc-handbook, doc-goals, doc-old)
+    # as Linear sends it. -Detail adds the content. -Change applies a DocumentCreateInput or
+    # DocumentUpdateInput hashtable to it.
+    param(
+        [Parameter(Mandatory)][string] $Id,
+        [switch] $Detail,
+        [System.Collections.IDictionary] $Change = @{}
+    )
+    $users = @{ 'user-ada' = @{ id = 'user-ada'; name = 'Ada Lovelace' }; 'user-grace' = @{ id = 'user-grace'; name = 'Grace Hopper' } }
+    $values = switch ($Id) {
+        'doc-plan' { @{ title = 'Launch plan'; slugId = '419202a9d18c'; projectId = 'project-web'; ownerId = 'user-ada'; updatedAt = '2026-10-15T09:00:00.000Z'; content = "# Launch`nSteps"; archivedAt = $null } }
+        'doc-notes' { @{ title = 'Investigation notes'; slugId = '82a1be6fa604'; issueId = 'ENG-1'; ownerId = 'user-grace'; updatedAt = '2026-10-16T09:00:00.000Z'; content = 'Notes'; archivedAt = $null } }
+        'doc-handbook' { @{ title = 'On-call handbook'; slugId = 'ed54ff6c360e'; teamId = 'team-ops'; ownerId = $null; updatedAt = '2026-10-10T09:00:00.000Z'; content = 'Pager rules'; archivedAt = $null } }
+        'doc-goals' { @{ title = 'Growth goals'; slugId = '1a2b3c4d5e6f'; initiativeId = 'initiative-growth'; ownerId = 'user-ada'; updatedAt = '2026-10-01T09:00:00.000Z'; content = 'Goals'; archivedAt = $null } }
+        'doc-old' { @{ title = 'Old draft'; slugId = '0d0d0d0d0d0d'; projectId = 'project-web'; ownerId = $null; updatedAt = '2026-01-01T09:00:00.000Z'; content = ''; archivedAt = '2026-02-01T00:00:00.000Z' } }
+        default { @{ title = 'New document'; slugId = 'fedcba987654'; ownerId = 'user-ada'; updatedAt = '2026-10-17T09:00:00.000Z'; content = ''; archivedAt = $null } }
+    }
+    $containers = 'issueId', 'projectId', 'initiativeId', 'teamId'
+    if (@($containers | Where-Object { $Change.Contains($_) }).Count -gt 0) {
+        foreach ($field in $containers) { $values[$field] = $null }
+    }
+    foreach ($key in $Change.Keys) { $values[$key] = $Change[$key] }
+
+    $slug = ($values.title.ToLowerInvariant() -replace '[^a-z0-9]+', '-').Trim('-')
+    $issueKey = [string]$values['issueId'] -replace '^issue-uuid-'
+    $node = [ordered]@{
+        id                = $Id
+        title             = $values.title
+        slugId            = $values.slugId
+        url               = "https://linear.app/acme/document/$slug-$($values.slugId)"
+        icon              = $null
+        createdAt         = '2026-09-01T09:00:00.000Z'
+        updatedAt         = $values.updatedAt
+        archivedAt        = $values.archivedAt
+        documentContentId = "content-$($Id -replace '^doc-')"
+        creator           = $users['user-ada']
+        owner             = if ($values['ownerId']) { $users[$values['ownerId']] } else { $null }
+        updatedBy         = $users['user-grace']
+        project           = if ($values['projectId']) { @{ id = $values['projectId']; name = $(if ($values['projectId'] -eq 'project-mobile') { 'Mobile App' } else { 'Website' }) } } else { $null }
+        issue             = if ($values['issueId']) { @{ id = "issue-uuid-$issueKey"; identifier = $issueKey } } else { $null }
+        initiative        = if ($values['initiativeId']) { @{ id = $values['initiativeId']; name = 'Q1 growth' } } else { $null }
+        team              = if ($values['teamId']) { @{ id = $values['teamId']; key = $(if ($values['teamId'] -eq 'team-ops') { 'OPS' } else { 'ENG' }) } } else { $null }
+    }
+    if ($Detail) { $node['content'] = $values.content }
+    $node
+}
+
+function Test-LinearTestDocumentFilter {
+    # Whether a fixture document node matches a DocumentFilter (container conditions, possibly under 'and').
+    param([Parameter(Mandatory)] $Node, [AllowNull()] $Filter)
+    if ($null -eq $Filter) { return $true }
+    if ($Filter.Contains('and')) {
+        foreach ($condition in $Filter['and']) { if (-not (Test-LinearTestDocumentFilter -Node $Node -Filter $condition)) { return $false } }
+        return $true
+    }
+    foreach ($field in 'issue', 'project', 'initiative', 'team') {
+        if (-not $Filter.Contains($field)) { continue }
+        $wanted = $Filter[$field]['id']['eq']
+        $actual = $Node[$field]
+        if ($null -eq $actual) { return $false }
+        $candidates = @($actual['id'])
+        if ($field -eq 'issue') { $candidates += $actual['identifier'] }
+        if ($wanted -notin $candidates) { return $false }
+    }
+    $true
+}
+
+function Get-LinearTestDocumentResponse {
+    # Serves the document operations, or returns $null for any other request.
+    #
+    # Documents, most recently updated first: doc-notes (issue ENG-1), doc-plan (project Website,
+    # content id content-plan), doc-handbook (team OPS), doc-goals (initiative Q1 growth), and
+    # the archived doc-old (Website, only with includeArchived). Documents are found by id or
+    # slug id; anything else does not exist. The title 'reject' is rejected.
+    # doc-plan has the comment thread comment-d1 with the reply comment-d2.
+    param([Parameter(Mandatory)][hashtable] $Request)
+
+    $query = $Request.query
+    $variables = if ($Request.ContainsKey('variables')) { $Request.variables } else { @{} }
+    $ids = @('doc-notes', 'doc-plan', 'doc-handbook', 'doc-goals', 'doc-old')
+    $slugs = @{ '419202a9d18c' = 'doc-plan'; '82a1be6fa604' = 'doc-notes'; 'ed54ff6c360e' = 'doc-handbook'; '1a2b3c4d5e6f' = 'doc-goals'; '0d0d0d0d0d0d' = 'doc-old' }
+    $resolve = { param($value) if ($slugs.ContainsKey($value)) { $slugs[$value] } elseif ($value -in $ids) { $value } else { $null } }
+    $rejected = New-LinearTestError -Message 'Argument Validation Error' -Code 'INPUT_ERROR'
+    $notFound = New-LinearTestError -Message 'Entity not found: Document' -Code 'INPUT_ERROR' -Path 'document'
+
+    if ($query -match 'query ListDocuments') {
+        $filter = if ($variables.Contains('filter')) { $variables['filter'] } else { $null }
+        $nodes = @(foreach ($id in $ids) {
+                if ($id -eq 'doc-old' -and $variables['includeArchived'] -ne $true) { continue }
+                $node = New-LinearTestDocumentNode -Id $id
+                if (Test-LinearTestDocumentFilter -Node $node -Filter $filter) { $node }
+            })
+        return New-LinearTestResponse -Data @{ documents = New-LinearTestConnection -Nodes $nodes }
+    }
+    if ($query -match 'query GetDocument\b') {
+        $id = & $resolve $variables.id
+        if (-not $id) { return New-LinearTestResponse -Data $null -Errors @($notFound) }
+        return New-LinearTestResponse -Data @{ document = New-LinearTestDocumentNode -Id $id -Detail }
+    }
+    if ($query -match 'mutation CreateDocument') {
+        $documentInput = $variables.input
+        if ($documentInput['title'] -eq 'reject') { return New-LinearTestResponse -Data @{ documentCreate = $null } -Errors @($rejected) }
+        return New-LinearTestResponse -Data @{ documentCreate = @{ success = $true; document = New-LinearTestDocumentNode -Id 'doc-new' -Detail -Change $documentInput } }
+    }
+    if ($query -match 'mutation UpdateDocument') {
+        $id = & $resolve $variables.id
+        if (-not $id -or $variables.input['title'] -eq 'reject') { return New-LinearTestResponse -Data @{ documentUpdate = $null } -Errors @($rejected) }
+        return New-LinearTestResponse -Data @{ documentUpdate = @{ success = $true; document = New-LinearTestDocumentNode -Id $id -Detail -Change $variables.input } }
+    }
+    if ($query -match 'mutation DeleteDocument') {
+        if (-not (& $resolve $variables.id)) { return New-LinearTestResponse -Data @{ documentDelete = $null } -Errors @($rejected) }
+        return New-LinearTestResponse -Data @{ documentDelete = @{ success = $true } }
+    }
+    if ($query -match 'query ListDocumentComments') {
+        $id = & $resolve $variables.id
+        if (-not $id) { return New-LinearTestResponse -Data $null -Errors @($notFound) }
+        $nodes = if ($id -eq 'doc-plan') {
+            @(
+                (New-LinearTestCommentNode -Id 'comment-d2' -Body 'Agreed' -Author 'Grace Hopper' -ParentId 'comment-d1' -DocumentId 'doc-plan' -CreatedAt '2026-10-11T10:00:00.000Z'),
+                (New-LinearTestCommentNode -Id 'comment-d1' -Body 'Step 2 needs an owner' -DocumentId 'doc-plan' -CreatedAt '2026-10-11T09:00:00.000Z')
+            )
+        }
+        else { @() }
+        return New-LinearTestResponse -Data @{ document = @{ comments = New-LinearTestConnection -Nodes $nodes } }
     }
     $null
 }

@@ -374,6 +374,67 @@ function ConvertTo-LinearInitiativeUpdate {
     }
 }
 
+function ConvertTo-LinearDocument {
+    <#
+    .SYNOPSIS
+        Flattens a Document node (DocumentFields fragment) into a PSLinear.Document object.
+    .NOTES
+        Container names what the document belongs to (an issue identifier, a project or
+        initiative name, or a team key) and ContainerType says which. Content is only filled for
+        a single document (GetDocument, create and update); it is $null in lists.
+    #>
+    [CmdletBinding()]
+    [OutputType('PSLinear.Document')]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [AllowNull()]
+        [object] $InputObject
+    )
+
+    process {
+        if ($null -eq $InputObject) { return }
+        $node = $InputObject
+        $container, $containerType = $null, $null
+        foreach ($candidate in @(
+                @('issue.identifier', 'Issue'),
+                @('project.name', 'Project'),
+                @('initiative.name', 'Initiative'),
+                @('team.key', 'Team')
+            )) {
+            $value = Get-LinearNestedValue -InputObject $node -Name $candidate[0]
+            if ($value) {
+                $container, $containerType = $value, $candidate[1]
+                break
+            }
+        }
+
+        [pscustomobject]@{
+            PSTypeName        = 'PSLinear.Document'
+            Id                = $node.id
+            Title             = Get-LinearNestedValue -InputObject $node -Name 'title'
+            Container         = $container
+            ContainerType     = $containerType
+            Owner             = Get-LinearNestedValue -InputObject $node -Name 'owner.name'
+            Creator           = Get-LinearNestedValue -InputObject $node -Name 'creator.name'
+            UpdatedBy         = Get-LinearNestedValue -InputObject $node -Name 'updatedBy.name'
+            CreatedAt         = Get-LinearNestedValue -InputObject $node -Name 'createdAt'
+            UpdatedAt         = Get-LinearNestedValue -InputObject $node -Name 'updatedAt'
+            Content           = Get-LinearNestedValue -InputObject $node -Name 'content'
+            Icon              = Get-LinearNestedValue -InputObject $node -Name 'icon'
+            Url               = Get-LinearNestedValue -InputObject $node -Name 'url'
+            ArchivedAt        = Get-LinearNestedValue -InputObject $node -Name 'archivedAt'
+            SlugId            = Get-LinearNestedValue -InputObject $node -Name 'slugId'
+            IssueId           = Get-LinearNestedValue -InputObject $node -Name 'issue.id'
+            ProjectId         = Get-LinearNestedValue -InputObject $node -Name 'project.id'
+            InitiativeId      = Get-LinearNestedValue -InputObject $node -Name 'initiative.id'
+            TeamId            = Get-LinearNestedValue -InputObject $node -Name 'team.id'
+            OwnerId           = Get-LinearNestedValue -InputObject $node -Name 'owner.id'
+            CreatorId         = Get-LinearNestedValue -InputObject $node -Name 'creator.id'
+            DocumentContentId = Get-LinearNestedValue -InputObject $node -Name 'documentContentId'
+        }
+    }
+}
+
 function ConvertFrom-LinearHealth {
     <#
     .SYNOPSIS
@@ -398,7 +459,8 @@ function ConvertTo-LinearComment {
         Flattens a Comment node (CommentFields fragment) into a PSLinear.Comment object.
     .NOTES
         Author is the user, or the integration (bot) or external user that wrote the comment.
-        Target names what the comment is on: an issue identifier, or a project or initiative name. ThreadId is
+        Target names what the comment is on: an issue identifier, or a project, initiative or
+        document name. ThreadId is
         the id of the first comment in the thread (the comment itself when it is not a reply).
     #>
     [CmdletBinding()]
@@ -420,30 +482,33 @@ function ConvertTo-LinearComment {
         $target = @(
             (Get-LinearNestedValue -InputObject $node -Name 'issue.identifier'),
             (Get-LinearNestedValue -InputObject $node -Name 'project.name'),
-            (Get-LinearNestedValue -InputObject $node -Name 'initiative.name')
+            (Get-LinearNestedValue -InputObject $node -Name 'initiative.name'),
+            (Get-LinearNestedValue -InputObject $node -Name 'documentContent.document.title')
         ) | Where-Object { $_ } | Select-Object -First 1
         $parentId = Get-LinearNestedValue -InputObject $node -Name 'parentId'
 
         [pscustomobject]@{
-            PSTypeName   = 'PSLinear.Comment'
-            Id           = $node.id
-            Target       = $target
-            Author       = $author
-            Body         = Get-LinearNestedValue -InputObject $node -Name 'body'
-            CreatedAt    = Get-LinearNestedValue -InputObject $node -Name 'createdAt'
-            EditedAt     = Get-LinearNestedValue -InputObject $node -Name 'editedAt'
-            IsReply      = -not [string]::IsNullOrEmpty($parentId)
-            ThreadId     = if ($parentId) { $parentId } else { $node.id }
-            Resolved     = $null -ne (Get-LinearNestedValue -InputObject $node -Name 'resolvedAt')
-            ResolvedAt   = Get-LinearNestedValue -InputObject $node -Name 'resolvedAt'
-            ResolvedBy   = Get-LinearNestedValue -InputObject $node -Name 'resolvingUser.name'
-            QuotedText   = Get-LinearNestedValue -InputObject $node -Name 'quotedText'
-            Url          = Get-LinearNestedValue -InputObject $node -Name 'url'
-            ParentId     = $parentId
-            AuthorId     = Get-LinearNestedValue -InputObject $node -Name 'user.id'
-            IssueId      = Get-LinearNestedValue -InputObject $node -Name 'issue.id'
-            ProjectId    = Get-LinearNestedValue -InputObject $node -Name 'project.id'
-            InitiativeId = Get-LinearNestedValue -InputObject $node -Name 'initiative.id'
+            PSTypeName        = 'PSLinear.Comment'
+            Id                = $node.id
+            Target            = $target
+            Author            = $author
+            Body              = Get-LinearNestedValue -InputObject $node -Name 'body'
+            CreatedAt         = Get-LinearNestedValue -InputObject $node -Name 'createdAt'
+            EditedAt          = Get-LinearNestedValue -InputObject $node -Name 'editedAt'
+            IsReply           = -not [string]::IsNullOrEmpty($parentId)
+            ThreadId          = if ($parentId) { $parentId } else { $node.id }
+            Resolved          = $null -ne (Get-LinearNestedValue -InputObject $node -Name 'resolvedAt')
+            ResolvedAt        = Get-LinearNestedValue -InputObject $node -Name 'resolvedAt'
+            ResolvedBy        = Get-LinearNestedValue -InputObject $node -Name 'resolvingUser.name'
+            QuotedText        = Get-LinearNestedValue -InputObject $node -Name 'quotedText'
+            Url               = Get-LinearNestedValue -InputObject $node -Name 'url'
+            ParentId          = $parentId
+            AuthorId          = Get-LinearNestedValue -InputObject $node -Name 'user.id'
+            IssueId           = Get-LinearNestedValue -InputObject $node -Name 'issue.id'
+            ProjectId         = Get-LinearNestedValue -InputObject $node -Name 'project.id'
+            InitiativeId      = Get-LinearNestedValue -InputObject $node -Name 'initiative.id'
+            DocumentId        = Get-LinearNestedValue -InputObject $node -Name 'documentContent.document.id'
+            DocumentContentId = Get-LinearNestedValue -InputObject $node -Name 'documentContent.id'
         }
     }
 }

@@ -1,0 +1,5 @@
+mutation DeleteDocument($id: String!) {
+  documentDelete(id: $id) {
+    success
+  }
+}

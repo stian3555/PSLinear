@@ -1,20 +1,21 @@
 function Get-LinearComment {
     <#
     .SYNOPSIS
-        Gets the comments on a Linear issue, project or initiative.
+        Gets the comments on a Linear issue, project, initiative or document.
 
     .DESCRIPTION
-        Returns every comment on an issue, a project or an initiative, thread by thread: threads are ordered by
+        Returns every comment on an issue, a project, an initiative or a document, thread by
+        thread: threads are ordered by
         their first comment, oldest first, and each thread's replies follow its first comment. A
         reply has IsReply set, and ParentId and ThreadId point at the first comment of its
         thread; a resolved thread has Resolved set on that first comment.
 
         Give an issue by identifier (ENG-123), UUID or URL, a project or initiative by name,
-        slug id, URL or id, or pipe in issues, projects and initiatives. Use -Id to get specific
-        comments.
+        slug id, URL or id, a document by id, slug id or URL, or pipe in issues, projects,
+        initiatives and documents. Use -Id to get specific comments.
 
-        A missing issue or comment writes a non-terminating error and the remaining input is
-        still processed.
+        A missing issue, document or comment writes a non-terminating error and the remaining
+        input is still processed.
 
     .PARAMETER Issue
         One or more issue identifiers (ENG-123), UUIDs or issue URLs.
@@ -25,9 +26,13 @@ function Get-LinearComment {
     .PARAMETER Initiative
         An initiative name, slug id (the hex suffix of its URL), URL or id.
 
+    .PARAMETER Document
+        A document id, slug id (the hex suffix of its URL) or URL.
+
     .PARAMETER InputObject
-        PSLinear.Issue, PSLinear.Project or PSLinear.Initiative objects, typically from
-        Get-LinearIssue, Get-LinearProject or Get-LinearInitiative.
+        PSLinear.Issue, PSLinear.Project, PSLinear.Initiative or PSLinear.Document objects,
+        typically from Get-LinearIssue, Get-LinearProject, Get-LinearInitiative or
+        Get-LinearDocument.
 
     .PARAMETER Id
         One or more comment ids.
@@ -57,11 +62,17 @@ function Get-LinearComment {
 
         Lists the comments on an initiative.
 
+    .EXAMPLE
+        Get-LinearDocument -Project Website -Title 'Launch plan' | Get-LinearComment
+
+        Lists the comments on a document.
+
     .INPUTS
         System.String
         PSLinear.Issue
         PSLinear.Project
         PSLinear.Initiative
+        PSLinear.Document
 
     .OUTPUTS
         PSLinear.Comment
@@ -90,6 +101,10 @@ function Get-LinearComment {
         [ValidateNotNullOrEmpty()]
         [string] $Initiative,
 
+        [Parameter(Mandatory, ParameterSetName = 'Document')]
+        [ValidateNotNullOrEmpty()]
+        [string] $Document,
+
         [Parameter(Mandatory, ValueFromPipeline, ParameterSetName = 'ByObject')]
         [object[]] $InputObject,
 
@@ -117,6 +132,7 @@ function Get-LinearComment {
                 'Issue' { foreach ($value in $Issue) { Get-LinearCommentTarget -Issue $value } }
                 'Project' { Get-LinearCommentTarget -Project $Project -Resolve }
                 'Initiative' { Get-LinearCommentTarget -Initiative $Initiative -Resolve }
+                'Document' { Get-LinearCommentTarget -Document $Document }
                 'ByObject' { foreach ($object in $InputObject) { Get-LinearCommentTarget -InputObject $object } }
             }
         }
@@ -130,6 +146,10 @@ function Get-LinearComment {
                 if ($target.Kind -eq 'Issue') {
                     $message = Format-LinearFailureMessage -Message "Issue '$($target.Name)' was not found." -Errors $result.Errors
                     $PSCmdlet.WriteError((New-LinearErrorRecord -Message $message -ErrorId 'PSLinear.IssueNotFound' -Category ObjectNotFound -TargetObject $target.Name))
+                }
+                elseif ($target.Kind -eq 'Document') {
+                    $message = Format-LinearFailureMessage -Message "Document '$($target.Id)' was not found." -Errors $result.Errors
+                    $PSCmdlet.WriteError((New-LinearErrorRecord -Message $message -ErrorId 'PSLinear.DocumentNotFound' -Category ObjectNotFound -TargetObject $target.Id))
                 }
                 else {
                     $message = Format-LinearFailureMessage -Message "Could not get the comments on $($target.Name)." -Errors $result.Errors

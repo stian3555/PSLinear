@@ -793,6 +793,50 @@
       </TableControl>
     </View>
     <View>
+      <Name>PSLinear.Document</Name>
+      <ViewSelectedBy>
+        <TypeName>PSLinear.Document</TypeName>
+      </ViewSelectedBy>
+      <TableControl>
+        <TableHeaders>
+          <TableColumnHeader>
+            <Label>Title</Label>
+            <Width>40</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Container</Label>
+            <Width>28</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>UpdatedBy</Label>
+            <Width>18</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>UpdatedAt</Label>
+            <Width>16</Width>
+          </TableColumnHeader>
+        </TableHeaders>
+        <TableRowEntries>
+          <TableRowEntry>
+            <TableColumnItems>
+              <TableColumnItem>
+                <PropertyName>Title</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <ScriptBlock>if ($_.Container) { '{0}: {1}' -f $_.ContainerType, $_.Container }</ScriptBlock>
+              </TableColumnItem>
+              <TableColumnItem>
+                <PropertyName>UpdatedBy</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <ScriptBlock>if ($_.UpdatedAt) { ([datetime]$_.UpdatedAt).ToLocalTime().ToString('yyyy-MM-dd HH:mm') }</ScriptBlock>
+              </TableColumnItem>
+            </TableColumnItems>
+          </TableRowEntry>
+        </TableRowEntries>
+      </TableControl>
+    </View>
+    <View>
       <Name>PSLinear.Context</Name>
       <ViewSelectedBy>
         <TypeName>PSLinear.Context</TypeName>

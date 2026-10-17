@@ -35,4 +35,11 @@ fragment CommentFields on Comment {
     id
     name
   }
+  documentContent {
+    id
+    document {
+      id
+      title
+    }
+  }
 }
