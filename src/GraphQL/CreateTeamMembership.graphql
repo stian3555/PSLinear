@@ -1,0 +1,22 @@
+mutation CreateTeamMembership($input: TeamMembershipCreateInput!) {
+  teamMembershipCreate(input: $input) {
+    success
+    teamMembership {
+      id
+      owner
+      createdAt
+      user {
+        id
+        name
+        displayName
+        email
+        admin
+        active
+      }
+      team {
+        id
+        key
+      }
+    }
+  }
+}

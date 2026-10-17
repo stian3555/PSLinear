@@ -6,8 +6,8 @@ function Get-LinearLabel {
     .DESCRIPTION
         Returns the labels that can be applied to issues, sorted by name. Without -Team, every
         label in the workspace is returned; with -Team, the workspace labels and that team's
-        own labels. Label groups and retired labels are left out; a label in a group shows the
-        group in its Group property.
+        own labels. Label groups and retired labels are left out unless you use -IncludeGroups
+        or -IncludeRetired; a label in a group shows the group in its Group property.
 
         A name without wildcards that matches no label writes a non-terminating error.
 
@@ -17,6 +17,13 @@ function Get-LinearLabel {
     .PARAMETER Team
         The team key (ENG), name or id. Accepts PSLinear.Team objects from the pipeline.
         Supports tab completion once connected.
+
+    .PARAMETER IncludeGroups
+        Also returns label groups (IsGroup), which hold other labels and cannot be applied to
+        issues.
+
+    .PARAMETER IncludeRetired
+        Also returns retired labels (RetiredAt), which can no longer be applied to new issues.
 
     .EXAMPLE
         Get-LinearLabel
@@ -33,12 +40,23 @@ function Get-LinearLabel {
 
         Lists the labels whose names start with 'needs-'.
 
+    .EXAMPLE
+        Get-LinearLabel -IncludeGroups -IncludeRetired | Where-Object IsGroup
+
+        Lists the label groups.
+
     .INPUTS
         System.String
         PSLinear.Team
 
     .OUTPUTS
         PSLinear.Label
+
+    .LINK
+        New-LinearLabel
+
+    .LINK
+        Set-LinearLabel
 
     .LINK
         Set-LinearIssue
@@ -54,7 +72,11 @@ function Get-LinearLabel {
         [Parameter(ValueFromPipelineByPropertyName)]
         [Alias('Key')]
         [ValidateNotNullOrEmpty()]
-        [string] $Team
+        [string] $Team,
+
+        [switch] $IncludeGroups,
+
+        [switch] $IncludeRetired
     )
 
     begin {
@@ -72,7 +94,11 @@ function Get-LinearLabel {
         }
 
         if (-not $fetched.ContainsKey($teamId)) {
-            $fetched[$teamId] = if ($teamId) { @(Get-LinearLabelCache -TeamId $teamId -Refresh) } else { @(Get-LinearLabelList) }
+            $fetched[$teamId] = if ($IncludeGroups -or $IncludeRetired) {
+                @(Get-LinearLabelList -TeamId $teamId -IncludeGroups:$IncludeGroups -IncludeRetired:$IncludeRetired)
+            }
+            elseif ($teamId) { @(Get-LinearLabelCache -TeamId $teamId -Refresh) }
+            else { @(Get-LinearLabelList) }
         }
         $labels = $fetched[$teamId]
         if (-not $Name) {

@@ -198,8 +198,10 @@ function Get-LinearTestLookupResponse {
     }
 
     if ($query -match 'query ListIssueLabels') {
-        # Without a filter every label is returned; with one, workspace labels and the listed teams'.
-        $teamIds = if ($variables.ContainsKey('filter')) { @($variables.filter.or[1].team.id.in) } else { $null }
+        # Without a filter every label is returned. With the lineage filter (or), workspace labels and
+        # the listed teams'; with a team filter, one team's own labels (team.id.eq) or the workspace
+        # labels only (team.null).
+        $filter = if ($variables.ContainsKey('filter')) { $variables['filter'] } else { $null }
         $engTeam = @{ id = 'team-eng'; key = 'ENG' }
         $opsTeam = @{ id = 'team-ops'; key = 'OPS' }
         $areaGroup = @{ id = 'label-area'; name = 'Area' }
@@ -214,7 +216,18 @@ function Get-LinearTestLookupResponse {
             @{ id = 'label-ops-frontend'; name = 'Frontend'; isGroup = $false; retiredAt = $null; parent = $null; team = $opsTeam }
         )
         $nodes = foreach ($label in $all) {
-            if ($null -ne $teamIds -and $null -ne $label.team -and $label.team.id -notin $teamIds) { continue }
+            if ($null -ne $filter) {
+                if ($filter.Contains('or')) {
+                    $teamIds = @($filter['or'][1]['team']['id']['in'])
+                    if ($null -ne $label.team -and $label.team.id -notin $teamIds) { continue }
+                }
+                elseif ($filter['team'].Contains('null')) {
+                    if ($null -ne $label.team) { continue }
+                }
+                elseif ($null -eq $label.team -or $label.team.id -ne $filter['team']['id']['eq']) {
+                    continue
+                }
+            }
             $label['color'] = '#000000'
             $label['description'] = $null
             $label
@@ -1228,6 +1241,127 @@ function Get-LinearTestDocumentResponse {
         }
         else { @() }
         return New-LinearTestResponse -Data @{ document = @{ comments = New-LinearTestConnection -Nodes $nodes } }
+    }
+    $null
+}
+
+function New-LinearTestMembershipNode {
+    param(
+        [string] $TeamId = 'team-eng',
+        [string] $UserId = 'user-ada',
+        [bool] $Owner = $false
+    )
+    $users = @{
+        'user-ada'    = @{ name = 'Ada Lovelace'; displayName = 'ada'; email = 'ada@example.com' }
+        'user-grace'  = @{ name = 'Grace Hopper'; displayName = 'grace'; email = 'grace@example.com' }
+        'user-alex-1' = @{ name = 'Alex Smith'; displayName = 'alex1'; email = 'alex.one@example.com' }
+        'user-alex-2' = @{ name = 'Alex Smith'; displayName = 'alex2'; email = 'alex.two@example.com' }
+    }
+    $user = $users[$UserId]
+    [ordered]@{
+        id        = "membership-$($TeamId -replace '^team-')-$($UserId -replace '^user-')"
+        owner     = $Owner
+        createdAt = '2026-01-01T00:00:00.000Z'
+        user      = @{ id = $UserId; name = $user.name; displayName = $user.displayName; email = $user.email; admin = $false; active = $true }
+        team      = @{ id = $TeamId; key = $(if ($TeamId -eq 'team-ops') { 'OPS' } else { 'ENG' }) }
+    }
+}
+
+function Get-LinearTestManagementResponse {
+    # Serves the label, team and team membership mutations and the membership list, or returns
+    # $null for any other request.
+    #
+    # Labels: the fixture labels of Get-LinearTestLookupResponse can be updated and deleted; other
+    #         ids fail. The name 'reject' is rejected.
+    # Teams:  ENG and OPS can be updated and deleted; other ids fail. The name 'reject' is rejected.
+    # Members: ENG has Ada (owner) and Grace; OPS has Grace. Adding user-alex-2 fails.
+    param([Parameter(Mandatory)][hashtable] $Request)
+
+    $query = $Request.query
+    $variables = if ($Request.ContainsKey('variables')) { $Request.variables } else { @{} }
+    $rejected = New-LinearTestError -Message 'Argument Validation Error' -Code 'INPUT_ERROR'
+    $labelIds = @('label-bug', 'label-feature', 'label-area', 'label-frontend', 'label-old', 'label-eng-backend', 'label-ops-incident', 'label-ops-frontend')
+    $groups = @{ 'label-area' = 'Area' }
+    $teams = @{ 'team-eng' = 'ENG'; 'team-ops' = 'OPS' }
+
+    $labelNode = {
+        param($Id, $Values)
+        [ordered]@{
+            id            = $Id
+            name          = $Values['name']
+            color         = $(if ($Values['color']) { $Values['color'] } else { '#000000' })
+            description   = $Values['description']
+            isGroup       = [bool]$Values['isGroup']
+            retiredAt     = $Values['retiredAt']
+            parent        = $(if ($Values['parentId']) { @{ id = $Values['parentId']; name = $groups[$Values['parentId']] } } else { $null })
+            inheritedFrom = $null
+            team          = $(if ($Values['teamId']) { @{ id = $Values['teamId']; key = $teams[$Values['teamId']] } } else { $null })
+        }
+    }
+
+    if ($query -match 'mutation CreateIssueLabel') {
+        $labelInput = $variables.input
+        if ($labelInput['name'] -eq 'reject') { return New-LinearTestResponse -Data @{ issueLabelCreate = $null } -Errors @($rejected) }
+        return New-LinearTestResponse -Data @{ issueLabelCreate = @{ success = $true; issueLabel = (& $labelNode 'label-new' $labelInput) } }
+    }
+    if ($query -match 'mutation UpdateIssueLabel') {
+        if ($variables.id -notin $labelIds -or $variables.input['name'] -eq 'reject') {
+            return New-LinearTestResponse -Data @{ issueLabelUpdate = $null } -Errors @($rejected)
+        }
+        $values = @{ name = 'Bug' }
+        foreach ($key in $variables.input.Keys) { $values[$key] = $variables.input[$key] }
+        return New-LinearTestResponse -Data @{ issueLabelUpdate = @{ success = $true; issueLabel = (& $labelNode $variables.id $values) } }
+    }
+    if ($query -match 'mutation DeleteIssueLabel') {
+        if ($variables.id -notin $labelIds) { return New-LinearTestResponse -Data @{ issueLabelDelete = $null } -Errors @($rejected) }
+        return New-LinearTestResponse -Data @{ issueLabelDelete = @{ success = $true; entityId = $variables.id } }
+    }
+
+    if ($query -match 'mutation CreateTeam\b') {
+        $teamInput = $variables.input
+        if ($teamInput['name'] -eq 'reject') { return New-LinearTestResponse -Data @{ teamCreate = $null } -Errors @($rejected) }
+        $node = New-LinearTestTeamNode -Key $(if ($teamInput['key']) { $teamInput['key'] } else { 'NEW' }) -Name $teamInput['name'] -Id 'team-new'
+        $node['description'] = $teamInput['description']
+        if ($teamInput['parentId']) { $node['parent'] = @{ id = $teamInput['parentId']; key = $teams[$teamInput['parentId']] } }
+        return New-LinearTestResponse -Data @{ teamCreate = @{ success = $true; team = $node } }
+    }
+    if ($query -match 'mutation UpdateTeam\b') {
+        if (-not $teams.ContainsKey($variables.id) -or $variables.input['name'] -eq 'reject') {
+            return New-LinearTestResponse -Data @{ teamUpdate = $null } -Errors @($rejected)
+        }
+        $teamInput = $variables.input
+        $key = if ($teamInput['key']) { $teamInput['key'] } else { $teams[$variables.id] }
+        $name = if ($teamInput['name']) { $teamInput['name'] } else { 'Engineering' }
+        $node = New-LinearTestTeamNode -Key $key -Name $name -Id $variables.id
+        if ($teamInput.Contains('description')) { $node['description'] = $teamInput['description'] }
+        if ($teamInput['parentId']) { $node['parent'] = @{ id = $teamInput['parentId']; key = $teams[$teamInput['parentId']] } }
+        return New-LinearTestResponse -Data @{ teamUpdate = @{ success = $true; team = $node } }
+    }
+    if ($query -match 'mutation DeleteTeam\b') {
+        if (-not $teams.ContainsKey($variables.id)) { return New-LinearTestResponse -Data @{ teamDelete = $null } -Errors @($rejected) }
+        return New-LinearTestResponse -Data @{ teamDelete = @{ success = $true; entityId = $variables.id } }
+    }
+
+    if ($query -match 'query ListTeamMemberships') {
+        $nodes = switch ($variables.id) {
+            'team-eng' { @((New-LinearTestMembershipNode -TeamId 'team-eng' -UserId 'user-grace'), (New-LinearTestMembershipNode -TeamId 'team-eng' -UserId 'user-ada' -Owner $true)) }
+            'team-ops' { @(New-LinearTestMembershipNode -TeamId 'team-ops' -UserId 'user-grace') }
+            default { $null }
+        }
+        if ($null -eq $nodes) {
+            return New-LinearTestResponse -Data $null -Errors @(New-LinearTestError -Message 'Entity not found: Team' -Code 'INPUT_ERROR' -Path 'team')
+        }
+        return New-LinearTestResponse -Data @{ team = @{ memberships = New-LinearTestConnection -Nodes @($nodes) } }
+    }
+    if ($query -match 'mutation CreateTeamMembership') {
+        $membershipInput = $variables.input
+        if ($membershipInput['userId'] -eq 'user-alex-2') { return New-LinearTestResponse -Data @{ teamMembershipCreate = $null } -Errors @($rejected) }
+        $node = New-LinearTestMembershipNode -TeamId $membershipInput['teamId'] -UserId $membershipInput['userId']
+        return New-LinearTestResponse -Data @{ teamMembershipCreate = @{ success = $true; teamMembership = $node } }
+    }
+    if ($query -match 'mutation DeleteTeamMembership') {
+        if ($variables.id -notlike 'membership-*') { return New-LinearTestResponse -Data @{ teamMembershipDelete = $null } -Errors @($rejected) }
+        return New-LinearTestResponse -Data @{ teamMembershipDelete = @{ success = $true; entityId = $variables.id } }
     }
     $null
 }
