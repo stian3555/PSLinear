@@ -1,6 +1,6 @@
 # PSLinear
 
-[![CI](https://github.com/OWNER/PSLinear/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/PSLinear/actions/workflows/ci.yml)
+[![CI](https://github.com/stian3555/PSLinear/actions/workflows/ci.yml/badge.svg)](https://github.com/stian3555/PSLinear/actions/workflows/ci.yml)
 [![PowerShell Gallery](https://img.shields.io/powershellgallery/v/PSLinear?include_prereleases&label=PowerShell%20Gallery)](https://www.powershellgallery.com/packages/PSLinear)
 [![Downloads](https://img.shields.io/powershellgallery/dt/PSLinear)](https://www.powershellgallery.com/packages/PSLinear)
 
