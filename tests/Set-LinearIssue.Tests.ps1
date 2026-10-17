@@ -189,6 +189,23 @@ Describe 'Set-LinearIssue' {
             }
         }
 
+        It 'looks up the issue''s team and warns when the team does not use estimates' {
+            Set-LinearIssue OPS-1 -Estimate 2 -WarningAction SilentlyContinue -WarningVariable estimateWarnings
+            $estimateWarnings.Count | Should -Be 1
+            $estimateWarnings[0].Message | Should -BeLike 'Team OPS does not use estimates*'
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                (Get-RequestOperation $Body) -eq 'GetIssueTeam'
+            }
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                (Get-RequestOperation $Body) -eq 'UpdateIssue' -and (Get-RequestBody $Body).variables.input.estimate -eq 2
+            }
+        }
+
+        It 'does not warn about estimates in a team that uses them' {
+            Set-LinearIssue ENG-1 -Estimate 2 -WarningVariable estimateWarnings
+            $estimateWarnings.Count | Should -Be 0
+        }
+
         It 'returns the updated issue with -PassThru' {
             $issue = Set-LinearIssue ENG-3 -Priority Low -PassThru
             $issue.Identifier | Should -Be 'ENG-3'

@@ -6,4 +6,10 @@ fragment TeamFields on Team {
   visibility
   createdAt
   archivedAt
+  issueEstimationType
+  inheritIssueEstimation
+  parent {
+    id
+    key
+  }
 }

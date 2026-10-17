@@ -86,16 +86,20 @@ function New-LinearTestTeamNode {
     param(
         [string] $Key = 'ENG',
         [string] $Name = 'Engineering',
-        [string] $Id = 'team-eng'
+        [string] $Id = 'team-eng',
+        [string] $EstimationType = 'fibonacci'
     )
     [ordered]@{
-        id          = $Id
-        key         = $Key
-        name        = $Name
-        description = $null
-        visibility  = 'public'
-        createdAt   = '2025-01-01T00:00:00.000Z'
-        archivedAt  = $null
+        id                     = $Id
+        key                    = $Key
+        name                   = $Name
+        description            = $null
+        visibility             = 'public'
+        createdAt              = '2025-01-01T00:00:00.000Z'
+        archivedAt             = $null
+        issueEstimationType    = $EstimationType
+        inheritIssueEstimation = $false
+        parent                 = $null
     }
 }
 
@@ -122,7 +126,7 @@ function Get-LinearTestLookupResponse {
     # $null for any other request. Use it at the top of a Send-LinearHttpRequest mock:
     #   $lookup = Get-LinearTestLookupResponse -Request $request; if ($lookup) { return $lookup }
     #
-    # Teams:    ENG (team-eng), OPS (team-ops)
+    # Teams:    ENG (team-eng, uses estimates), OPS (team-ops, estimates turned off)
     # States:   ENG Backlog, Todo, In Progress, In Review, Done, Canceled, Duplicate; OPS Todo, Doing, Done
     # Labels:   workspace Bug, Feature, group Area with Frontend, retired Old;
     #           ENG Backend; OPS Incident and a second Frontend
@@ -139,7 +143,7 @@ function Get-LinearTestLookupResponse {
         return New-LinearTestResponse -Data @{
             teams = New-LinearTestConnection -Nodes @(
                 (New-LinearTestTeamNode -Key 'ENG' -Name 'Engineering' -Id 'team-eng'),
-                (New-LinearTestTeamNode -Key 'OPS' -Name 'Operations' -Id 'team-ops')
+                (New-LinearTestTeamNode -Key 'OPS' -Name 'Operations' -Id 'team-ops' -EstimationType 'notUsed')
             )
         }
     }
@@ -178,8 +182,8 @@ function Get-LinearTestLookupResponse {
     }
 
     if ($query -match 'query ListIssueLabels') {
-        # Without a filter every label is returned; with one, workspace labels and that team's.
-        $teamId = if ($variables.ContainsKey('filter')) { $variables.filter.or[1].team.id.eq } else { $null }
+        # Without a filter every label is returned; with one, workspace labels and the listed teams'.
+        $teamIds = if ($variables.ContainsKey('filter')) { @($variables.filter.or[1].team.id.in) } else { $null }
         $engTeam = @{ id = 'team-eng'; key = 'ENG' }
         $opsTeam = @{ id = 'team-ops'; key = 'OPS' }
         $areaGroup = @{ id = 'label-area'; name = 'Area' }
@@ -194,7 +198,7 @@ function Get-LinearTestLookupResponse {
             @{ id = 'label-ops-frontend'; name = 'Frontend'; isGroup = $false; retiredAt = $null; parent = $null; team = $opsTeam }
         )
         $nodes = foreach ($label in $all) {
-            if ($null -ne $teamId -and $null -ne $label.team -and $label.team.id -ne $teamId) { continue }
+            if ($null -ne $teamIds -and $null -ne $label.team -and $label.team.id -notin $teamIds) { continue }
             $label['color'] = '#000000'
             $label['description'] = $null
             $label

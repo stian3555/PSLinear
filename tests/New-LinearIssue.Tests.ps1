@@ -114,6 +114,21 @@ Describe 'New-LinearIssue' {
             }
         }
 
+        It 'warns when the team does not use estimates, and still sends the estimate' {
+            New-LinearIssue -Team OPS -Title 'x' -Estimate 3 -ErrorAction SilentlyContinue -WarningAction SilentlyContinue -WarningVariable estimateWarnings | Out-Null
+            $estimateWarnings.Count | Should -Be 1
+            $estimateWarnings[0].Message | Should -BeLike 'Team OPS does not use estimates*'
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
+                $issueInput = (Get-RequestBody $Body).variables.input
+                $null -ne $issueInput -and $issueInput.estimate -eq 3
+            }
+        }
+
+        It 'does not warn about estimates in a team that uses them' {
+            New-LinearIssue -Team ENG -Title 'x' -Estimate 3 -WarningVariable estimateWarnings | Out-Null
+            $estimateWarnings.Count | Should -Be 0
+        }
+
         It 'resolves -Assignee me to the connected user' {
             New-LinearIssue -Team ENG -Title 'x' -Assignee me | Out-Null
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {

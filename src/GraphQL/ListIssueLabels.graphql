@@ -11,6 +11,9 @@ query ListIssueLabels($filter: IssueLabelFilter, $first: Int, $after: String) {
         id
         name
       }
+      inheritedFrom {
+        id
+      }
       team {
         id
         key

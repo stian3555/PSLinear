@@ -47,10 +47,13 @@ ENG-398      Todo             Medium      Ada Lovelace         Document the depl
 ## Installation
 
 ```powershell
-Install-PSResource -Name PSLinear -Prerelease
+Install-PSResource -Name PSLinear
 # or, with PowerShellGet 2.x:
-Install-Module -Name PSLinear -AllowPrerelease -Scope CurrentUser
+Install-Module -Name PSLinear -Scope CurrentUser
 ```
+
+Preview versions are published as prereleases: add `-Prerelease` (`-AllowPrerelease` for
+`Install-Module`) to get the latest one.
 
 ## Quick start
 

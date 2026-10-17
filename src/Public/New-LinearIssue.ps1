@@ -42,7 +42,8 @@ function New-LinearIssue {
         Project name or id.
 
     .PARAMETER Estimate
-        The estimate, in the team's estimation scale (for example story points).
+        The estimate, in the team's estimation scale (for example story points). Linear ignores
+        it in teams that do not use estimates, and the command warns when that is the case.
 
     .PARAMETER DueDate
         The due date. Only the date part is used.
@@ -142,7 +143,12 @@ function New-LinearIssue {
             if ($Priority) { $issueInput['priority'] = ConvertTo-LinearPriority -Priority $Priority }
             if ($Label) { $issueInput['labelIds'] = @(Resolve-LinearLabelId -TeamId $teamId -Label $Label) }
             if ($Project) { $issueInput['projectId'] = Resolve-LinearProjectId -Project $Project }
-            if ($PSBoundParameters.ContainsKey('Estimate')) { $issueInput['estimate'] = $Estimate }
+            if ($PSBoundParameters.ContainsKey('Estimate')) {
+                if (-not (Test-LinearTeamUsesEstimate -TeamId $teamId)) {
+                    Write-Warning "Team $(Get-LinearTeamKey -TeamId $teamId) does not use estimates, so Linear ignores -Estimate. Turn on estimates in the team's settings to use it."
+                }
+                $issueInput['estimate'] = $Estimate
+            }
             if ($PSBoundParameters.ContainsKey('DueDate')) { $issueInput['dueDate'] = ConvertTo-LinearTimelessDate -Date $DueDate }
             if ($Parent) { $issueInput['parentId'] = ConvertTo-LinearIssueIdentifier -Value $Parent }
         }
