@@ -8,9 +8,10 @@
 [![PowerShell Gallery](https://img.shields.io/powershellgallery/v/PSLinear?include_prereleases&label=PowerShell%20Gallery)](https://www.powershellgallery.com/packages/PSLinear)
 [![Downloads](https://img.shields.io/powershellgallery/dt/PSLinear)](https://www.powershellgallery.com/packages/PSLinear)
 
-A PowerShell module for [Linear](https://linear.app). Query, create and update issues with real
-objects you can pipe, filter and format, and use any part of the Linear GraphQL API when there
-is no dedicated cmdlet yet.
+A PowerShell module for [Linear](https://linear.app). Work with issues, projects, initiatives,
+documents and more as real objects you can pipe, filter and format, from the terminal, in
+scripts and in CI, and use any part of the Linear GraphQL API when there is no dedicated
+cmdlet.
 
 ```powershell
 Get-LinearIssue -Assignee me -StateType Unstarted, Started
@@ -25,28 +26,32 @@ ENG-398      Todo             Medium      Ada Lovelace         Document the depl
 
 ## Features
 
-- **Pipeline-first.** Typed objects (`PSLinear.Issue`, `PSLinear.Team`, `PSLinear.Project`
+- **Covers most of Linear.** Issues with comments, attachments and relations; projects with
+  milestones and status updates; initiatives; documents; teams, members and labels; cycles,
+  templates, users and agent sessions. 61 cmdlets in all.
+- **Pipeline-first.** Typed objects (`PSLinear.Issue`, `PSLinear.Project`, `PSLinear.Document`
   and more) with flattened properties for filtering and display, and the ids needed to chain
   commands.
-- **Readable filters.** `-Team ENG -State 'In Progress' -Assignee me -Label Bug` instead of
-  hand-written GraphQL filters, with a raw `-Filter` for everything else.
-- **Names instead of ids.** Create and update issues with team keys, state, label, project
-  and user names, or `me`. A state type such as `started` or `completed` picks the right state
-  in every team, and issue URLs work wherever an identifier does. Lookups are cached, and an
-  unknown name fails with a list of the valid values.
-- **Safe changes.** `New-`, `Set-` and `Remove-LinearIssue` support `-WhatIf` (which sends
-  nothing at all) and `-Confirm`. `Remove-LinearIssue` asks first and moves issues to the
-  trash, where they can be restored for 30 days.
+- **Names instead of ids.** Give teams, states, labels, users, projects, initiatives and
+  templates by name, key or `me`; issues, projects and documents also by URL. A state type
+  such as `started` picks the right state in every team. Lookups are cached, and an unknown
+  name fails with a list of the valid values.
+- **Safe changes.** Every command that changes something supports `-WhatIf`, which sends
+  nothing at all, and `-Confirm`. Removals ask first and use Linear's trash where it has one.
+- **Fits your git workflow.** `Start-LinearIssue` assigns an issue to you, moves it to In
+  Progress and checks out its branch; `Get-LinearIssue -Current` finds the issue of the branch
+  you are on.
+- **Sign in your way.** In the browser (OAuth with PKCE, renewed automatically), with a
+  personal API key, from a SecretManagement vault, or from an environment variable in CI.
+  Tokens stay in memory as `SecureString`.
 - **Automatic paging.** Results stream page by page. `-First` sets a limit; `-All` follows
   pagination to the end. Stopping early (`| Select-Object -First 5`) stops the requests too.
 - **Handles the API's rules for you.** Retries rate-limited requests, server errors and
-  network failures with backoff. Reports GraphQL errors even when they arrive with HTTP 200.
-  Keeps queries well below Linear's complexity limits.
-- **Safe credentials.** Tokens are kept as `SecureString` in memory only. Supports
-  SecretManagement vaults and environment variables for CI.
+  network failures with backoff, reports GraphQL errors even when they arrive with HTTP 200,
+  and keeps queries well below Linear's complexity limit.
 - **Escape hatch.** `Invoke-LinearGraphQL` runs any query or mutation, with `-WhatIf` for
   mutations.
-- **Cross-platform.** PowerShell 7.4+ on Windows, macOS and Linux.
+- **Cross-platform.** PowerShell 7.4+ on Windows, macOS and Linux, tested on all three.
 
 ## Installation
 
@@ -61,25 +66,26 @@ Preview versions are published as prereleases: add `-Prerelease` (`-AllowPrerele
 
 ## Quick start
 
-1. Create a personal API key in Linear under **Settings > Security & access**.
-2. Connect and start querying:
-
 ```powershell
-Connect-Linear              # prompts for the API key without echoing it
+Connect-Linear -Browser     # sign in on Linear's consent page in your browser
 Get-LinearViewer            # who am I?
 Get-LinearTeam              # which teams can I see?
-Get-LinearIssue ENG-123     # one issue
+Get-LinearIssue -Assignee me
+Start-LinearIssue ENG-123   # take an issue and check out its branch
 ```
+
+Prefer an API key? Create one in Linear under **Settings > Security & access** and run
+`Connect-Linear`, which prompts for it without echoing.
 
 ## Authentication
 
 | Method | Command |
 | --- | --- |
+| Sign in through the browser (OAuth) | `Connect-Linear -Browser [-SecretName LinearSignIn]` |
 | Personal API key (prompt) | `Connect-Linear` |
 | Personal API key (value) | `Connect-Linear -ApiKey $secureString` |
 | SecretManagement vault | `Connect-Linear -SecretName LinearApiKey [-Vault MyVault]` |
 | Environment variable | `Connect-Linear -FromEnvironment`, or just set `LINEAR_API_KEY` |
-| Sign in through the browser (OAuth) | `Connect-Linear -Browser -ClientId <id> [-SecretName LinearSignIn]` |
 | OAuth access token | `Connect-Linear -AccessToken $secureString` |
 
 When `LINEAR_API_KEY` is set, every command connects implicitly, so pipelines need no
@@ -120,6 +126,8 @@ page shows or to restrict sign-ins to your workspace:
 
 ## Examples
 
+### Find issues
+
 ```powershell
 # My open work, oldest update first
 Get-LinearIssue -Assignee me -StateType Unstarted, Started | Sort-Object UpdatedAt
@@ -133,12 +141,6 @@ Get-LinearIssue -Team ENG -Label Bug -All | Group-Object State -NoElement | Sort
 # Current cycle for several teams
 Get-LinearTeam -Name ENG, OPS | Get-LinearIssue -CurrentCycle
 
-# What can I use? States, labels, projects and cycles of a team
-Get-LinearWorkflowState -Team ENG
-Get-LinearLabel -Team ENG
-Get-LinearProject -Team ENG -Status started | Sort-Object TargetDate
-Get-LinearCycle -Team ENG -Previous -Active -Next
-
 # Unassigned issues that mention "login"
 Get-LinearIssue -Unassigned -Search login
 
@@ -149,60 +151,39 @@ Get-LinearIssue -StateType Unstarted, Started -Filter @{ dueDate = @{ lt = (Get-
 Get-LinearIssue -Team ENG -All |
     Select-Object Identifier, Title, State, Assignee, PriorityLabel, Labels, UpdatedAt |
     Export-Csv -Path eng-issues.csv -NoTypeInformation
+```
 
-# Create an issue; states, labels, projects and users are given by name
+### Create and change issues
+
+```powershell
+# States, labels, projects and users are given by name
 New-LinearIssue -Team ENG -Title 'Login fails on Safari' -Label Bug -Priority High -Assignee me -State Todo
 
-# Create a sub-issue, due in a week
+# A sub-issue, due in a week
 New-LinearIssue -Team ENG -Title 'Write tests for the retry logic' -Parent ENG-412 -DueDate (Get-Date).AddDays(7)
 
 # From a template, planned for the next cycle and a project milestone
 New-LinearIssue -Team ENG -Title 'Payment fails on retry' -Template 'Bug report' -Cycle next -Project Checkout -Milestone Beta
 
-# Move the unstarted issues of the current cycle to the next one
-Get-LinearIssue -Team ENG -Cycle active -StateType Unstarted | Set-LinearIssue -Cycle next
-
-# Start work on an issue: assign it to you, move it to In Progress and check out its git branch
-Start-LinearIssue ENG-412
-
-# Later, in the same repository: which issue is this branch for?
-Get-LinearIssue -Current | Format-List Identifier, Title, State, Url
-
-# Create a project for two teams, then start it and post a status update
-New-LinearProject 'Checkout v2' -Team ENG, OPS -Lead me -TargetDate 2027-03-31 -Label Customer
-Set-LinearProject 'Checkout v2' -Status started -AddMember 'grace@example.com'
-New-LinearProjectUpdate -Project 'Checkout v2' 'Design approved; build starts Monday.' -Health OnTrack
-
-# Projects in progress whose latest update is not on track
-Get-LinearProject -Status started | Get-LinearProjectUpdate -First 1 | Where-Object Health -NE 'OnTrack'
-
-# Group projects in an initiative and post its status
-New-LinearInitiative 'Q1 growth' -Owner me -Status Active -TargetDate 2027-03-31 |
-    Set-LinearInitiative -AddProject 'Checkout v2', Website
-New-LinearInitiativeUpdate -Initiative 'Q1 growth' 'Checkout v2 is on track; Website slipped a week.' -Health AtRisk
-
-# Set up a sub-team with its own label group and members
-New-LinearTeam 'Mobile' -Key MOB -Parent ENG
-New-LinearLabel Platform -Team MOB -IsGroup
-New-LinearLabel iOS -Team MOB -Group Platform -Color '#5E6AD2'
-Add-LinearTeamMember MOB -User me, 'grace@example.com'
-
-# Write a project document from a Markdown file, then read it back
-New-LinearDocument 'Launch plan' -Project 'Checkout v2' -Content (Get-Content ./launch-plan.md -Raw)
-Get-LinearDocument -Project 'Checkout v2' -Title 'Launch plan' | Get-LinearDocument | Select-Object -ExpandProperty Content
-
-# Remove the due date and take the issue out of its cycle
-Set-LinearIssue ENG-412 -Clear DueDate, Cycle
-
 # Triage: assign every unassigned bug and add a label, keeping the existing labels
 Get-LinearIssue -Team ENG -Label Bug -Unassigned | Set-LinearIssue -Assignee 'grace@example.com' -AddLabel Triaged
 
-# Preview a bulk change without sending anything
-Get-LinearIssue -Assignee me -State 'In Review' | Set-LinearIssue -State Done -WhatIf
+# Move the unstarted issues of the current cycle to the next one
+Get-LinearIssue -Team ENG -Cycle active -StateType Unstarted | Set-LinearIssue -Cycle next
 
-# Close issues across teams whose done states have different names
-Get-LinearIssue -Label Duplicate -StateType Unstarted -All | Set-LinearIssue -State completed
+# Close issues across teams whose done states have different names, previewing first
+Get-LinearIssue -Label Duplicate -StateType Unstarted -All | Set-LinearIssue -State completed -WhatIf
 
+# Remove the due date and take an issue out of its cycle
+Set-LinearIssue ENG-412 -Clear DueDate, Cycle
+
+# Move issues to the trash (asks per issue unless -Confirm:$false); -Archive archives instead
+Get-LinearIssue -Team ENG -Label Spam -All | Remove-LinearIssue
+```
+
+### Comments, files and relations
+
+```powershell
 # Comment, reply and resolve
 Add-LinearComment ENG-412 'Deployed to staging.'
 Get-LinearComment ENG-412 | Select-Object -Last 1 | Add-LinearComment -Body 'Thanks, fixed.'
@@ -213,25 +194,162 @@ Add-LinearAttachment ENG-412 ./logs/*.log -Comment 'Logs from the failed run.'
 Add-LinearAttachment ENG-412 -Url https://github.com/acme/app/pull/42
 Add-LinearComment ENG-412 'After the fix:' -Attachment ./after.png
 
-# Relations: what blocks my open work, and mark a duplicate
+# What blocks my open work, and mark a duplicate
 Get-LinearIssue -Assignee me -StateType Unstarted, Started | Get-LinearIssueRelation -Type BlockedBy
 Add-LinearIssueRelation ENG-412 DuplicateOf ENG-398
+```
 
-# Move issues to the trash (asks per issue unless -Confirm:$false); -Archive archives instead
-Get-LinearIssue -Team ENG -Label Spam -All | Remove-LinearIssue
+### Git workflow
 
-# Anything else: raw GraphQL, with -WhatIf for mutations
+```powershell
+# Assign the issue to you, move it to In Progress and check out its branch
+Start-LinearIssue ENG-412
+
+# Later, in the same repository: which issue is this branch for?
+Get-LinearIssue -Current | Format-List Identifier, Title, State, Url
+
+# Start several issues at once, without touching git
+Get-LinearIssue -Assignee me -Cycle active -StateType Unstarted | Start-LinearIssue -NoBranch
+```
+
+### Projects, milestones and initiatives
+
+```powershell
+# Create a project for two teams, then start it and post a status update
+New-LinearProject 'Checkout v2' -Team ENG, OPS -Lead me -TargetDate 2027-03-31 -Label Customer
+Set-LinearProject 'Checkout v2' -Status started -AddMember 'grace@example.com'
+New-LinearProjectUpdate -Project 'Checkout v2' 'Design approved; build starts Monday.' -Health OnTrack
+
+# Plan a milestone and put issues in it
+New-LinearMilestone -Project 'Checkout v2' -Name Beta -TargetDate 2027-02-01
+Get-LinearIssue -Project 'Checkout v2' -Label Blocker | Set-LinearIssue -Milestone Beta
+
+# Projects in progress whose latest update is not on track
+Get-LinearProject -Status started | Get-LinearProjectUpdate -First 1 | Where-Object Health -NE 'OnTrack'
+
+# Group projects in an initiative and post its status
+New-LinearInitiative 'Q1 growth' -Owner me -Status Active -TargetDate 2027-03-31 |
+    Set-LinearInitiative -AddProject 'Checkout v2', Website
+New-LinearInitiativeUpdate -Initiative 'Q1 growth' 'Checkout v2 is on track; Website slipped a week.' -Health AtRisk
+```
+
+### Documents
+
+```powershell
+# Write a project document from a Markdown file, then read it back
+New-LinearDocument 'Launch plan' -Project 'Checkout v2' -Content (Get-Content ./launch-plan.md -Raw)
+Get-LinearDocument -Project 'Checkout v2' -Title 'Launch plan' | Get-LinearDocument | Select-Object -ExpandProperty Content
+
+# Discuss it
+Get-LinearDocument -Project 'Checkout v2' -Title 'Launch plan' | Add-LinearComment -Body 'Step 3 needs an owner.'
+```
+
+### Teams and labels
+
+```powershell
+# What can I use in a team? States, labels, projects and cycles
+Get-LinearWorkflowState -Team ENG
+Get-LinearLabel -Team ENG
+Get-LinearProject -Team ENG -Status started | Sort-Object TargetDate
+Get-LinearCycle -Team ENG -Previous -Active -Next
+
+# Set up a sub-team with its own label group and members
+New-LinearTeam 'Mobile' -Key MOB -Parent ENG
+New-LinearLabel Platform -Team MOB -IsGroup
+New-LinearLabel iOS -Team MOB -Group Platform -Color '#5E6AD2'
+Add-LinearTeamMember MOB -User me, 'grace@example.com'
+```
+
+### Anything else
+
+```powershell
+# Raw GraphQL, with -WhatIf for mutations
 Invoke-LinearGraphQL -Query '{ viewer { assignedIssues(first: 5) { nodes { identifier title } } } }'
 Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { success } }' -Variables @{ id = 'ENG-1' } -WhatIf
 ```
 
 ## Commands
 
+Run `Get-Help <command> -Full` for every parameter and more examples.
+
+### Connection
+
 | Command | Description |
 | --- | --- |
-| `Connect-Linear` | Connect with an API key, a browser sign-in (OAuth with PKCE), an OAuth token, a vault secret or an environment variable. |
+| `Connect-Linear` | Connect with a browser sign-in (OAuth with PKCE), an API key, a vault secret, an environment variable or an OAuth token. |
 | `Disconnect-Linear` | Forget the credential and cached data; `-Revoke` also revokes an OAuth sign-in. |
 | `Get-LinearViewer` | The authenticated user and organization. |
+| `Get-LinearRateLimit` | Rate-limit status from the latest response. |
+
+### Issues
+
+| Command | Description |
+| --- | --- |
+| `Get-LinearIssue` | Issues by identifier or URL, the issue of the current git branch (`-Current`), or filtered lists with paging. |
+| `New-LinearIssue` | Create an issue, with states, labels, projects, milestones, cycles, users and templates given by name. |
+| `Set-LinearIssue` | Change issues: state, assignee, labels (replace, add or remove), priority and more, or clear values with `-Clear`. |
+| `Start-LinearIssue` | Start an issue: assign it to you, move it to a started state and check out its git branch. |
+| `Remove-LinearIssue` | Move issues to the trash, or archive them with `-Archive`. |
+
+### Comments, attachments and relations
+
+| Command | Description |
+| --- | --- |
+| `Get-LinearComment` | Comments on an issue, project, initiative or document, thread by thread. |
+| `Add-LinearComment` | Comment on an issue, project, initiative or document, or reply to a comment. |
+| `Set-LinearComment` | Edit a comment, or resolve or reopen its thread. |
+| `Remove-LinearComment` | Delete comments. |
+| `Get-LinearAttachment` | Attachments of issues: uploaded files, links and integration links. |
+| `Add-LinearAttachment` | Upload files to an issue (private by default) or link a URL to it, with optional metadata. |
+| `Set-LinearAttachment` | Change an attachment's title, subtitle or metadata. |
+| `Remove-LinearAttachment` | Remove attachments from issues. |
+| `Get-LinearIssueRelation` | Relations of an issue, seen from it: Blocks, BlockedBy, Related, DuplicateOf, DuplicatedBy. |
+| `Add-LinearIssueRelation` | Relate issues: blocks, blocked by, related or duplicate. |
+| `Remove-LinearIssueRelation` | Remove relations, by id or between two issues. |
+
+### Projects and milestones
+
+| Command | Description |
+| --- | --- |
+| `Get-LinearProject` | Projects with status, health, lead, teams, labels, dates and progress, filterable by team and status; `-Id` for the full project. |
+| `New-LinearProject` | Create a project, with teams, lead, members, status, labels and template given by name. |
+| `Set-LinearProject` | Change projects: status, lead, dates, priority, teams, labels and members (replace, add or remove), or clear values. |
+| `Remove-LinearProject` | Move projects to the trash; Linear archives their issues until the project is restored. |
+| `Get-LinearProjectUpdate` | Status updates of a project, or of every project, newest first. |
+| `New-LinearProjectUpdate` | Post a project status update with a health (OnTrack, AtRisk, OffTrack). |
+| `Set-LinearProjectUpdate` | Edit a status update's text or health. |
+| `Remove-LinearProjectUpdate` | Remove status updates. |
+| `Get-LinearMilestone` | Milestones of a project, or of every project, with status, target date and progress. |
+| `New-LinearMilestone` | Create a project milestone. |
+| `Set-LinearMilestone` | Rename, reschedule, reorder or move milestones. |
+| `Remove-LinearMilestone` | Delete milestones; their issues stay in the project. |
+
+### Initiatives
+
+| Command | Description |
+| --- | --- |
+| `Get-LinearInitiative` | Initiatives with status, health, owner, projects and labels; `-Id` for the full initiative. |
+| `New-LinearInitiative` | Create an initiative, with owner, labels and (on plans with team initiatives) lead team given by name. |
+| `Set-LinearInitiative` | Change initiatives (status, owner, dates, labels) and add or remove their projects. |
+| `Remove-LinearInitiative` | Move initiatives to the trash, or archive them with `-Archive`. |
+| `Get-LinearInitiativeUpdate` | Status updates of an initiative, or of every initiative, newest first. |
+| `New-LinearInitiativeUpdate` | Post an initiative status update with a health. |
+| `Set-LinearInitiativeUpdate` | Edit an initiative status update's text or health. |
+| `Remove-LinearInitiativeUpdate` | Remove initiative status updates. |
+
+### Documents
+
+| Command | Description |
+| --- | --- |
+| `Get-LinearDocument` | Documents of an issue, project, initiative or team, or all of them, most recently updated first; `-Id` for the content. |
+| `New-LinearDocument` | Create a document in an issue, project, initiative or team. |
+| `Set-LinearDocument` | Rename a document, replace its content, change its owner or move it. |
+| `Remove-LinearDocument` | Move documents to the trash. |
+
+### Teams, users and labels
+
+| Command | Description |
+| --- | --- |
 | `Get-LinearTeam` | Teams, filterable by key or name with wildcards. |
 | `New-LinearTeam` | Create a team or sub-team. |
 | `Set-LinearTeam` | Rename a team, change its key, description, time zone or parent. |
@@ -245,53 +363,15 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { 
 | `New-LinearLabel` | Create a workspace or team label, or a label group. |
 | `Set-LinearLabel` | Rename, recolor, regroup, retire or restore labels. |
 | `Remove-LinearLabel` | Delete labels (Linear removes them from their issues). |
-| `Get-LinearProject` | Projects with status, health, lead, teams, labels, dates and progress, filterable by team and status; `-Id` for the full project with content and members. |
-| `New-LinearProject` | Create a project, with teams, lead, members, status, labels and template given by name. |
-| `Set-LinearProject` | Change projects: status, lead, dates, priority, teams, labels and members (replace, add or remove), or clear values. |
-| `Remove-LinearProject` | Move projects to the trash; Linear archives their issues until the project is restored. |
-| `Get-LinearProjectUpdate` | Status updates of a project, or of every project, newest first. |
-| `New-LinearProjectUpdate` | Post a project status update with a health (OnTrack, AtRisk, OffTrack). |
-| `Set-LinearProjectUpdate` | Edit a status update's text or health. |
-| `Remove-LinearProjectUpdate` | Remove status updates. |
-| `Get-LinearInitiative` | Initiatives with status, health, owner, projects and labels; `-Id` for the full initiative with content and sub-initiatives. |
-| `New-LinearInitiative` | Create an initiative, with owner, labels and (on plans with team initiatives) lead team given by name. |
-| `Set-LinearInitiative` | Change initiatives (status, owner, dates, labels) and add or remove their projects. |
-| `Remove-LinearInitiative` | Move initiatives to the trash, or archive them with `-Archive`. |
-| `Get-LinearInitiativeUpdate` | Status updates of an initiative, or of every initiative, newest first. |
-| `New-LinearInitiativeUpdate` | Post an initiative status update with a health. |
-| `Set-LinearInitiativeUpdate` | Edit an initiative status update's text or health. |
-| `Remove-LinearInitiativeUpdate` | Remove initiative status updates. |
-| `Get-LinearDocument` | Documents of an issue, project, initiative or team, or all of them, most recently updated first; `-Id` for the content. |
-| `New-LinearDocument` | Create a document in an issue, project, initiative or team. |
-| `Set-LinearDocument` | Rename a document, replace its content, change its owner or move it. |
-| `Remove-LinearDocument` | Move documents to the trash. |
+
+### Cycles, templates and more
+
+| Command | Description |
+| --- | --- |
 | `Get-LinearCycle` | Cycles per team, with `-Active`, `-Next`, `-Previous` and `-Number`. |
 | `Get-LinearTemplate` | Issue, project and document templates, optionally those a team can use. |
-| `Get-LinearMilestone` | Milestones of a project, or of every project, with status, target date and progress. |
-| `New-LinearMilestone` | Create a project milestone. |
-| `Set-LinearMilestone` | Rename, reschedule, reorder or move milestones. |
-| `Remove-LinearMilestone` | Delete milestones; their issues stay in the project. |
-| `Get-LinearIssue` | Issues by identifier or URL, the issue of the current git branch (`-Current`), or filtered lists with paging. |
-| `Start-LinearIssue` | Start an issue: assign it to you, move it to a started state and check out its git branch. |
-| `New-LinearIssue` | Create an issue, with states, labels, projects, milestones, cycles, users and templates given by name. |
-| `Set-LinearIssue` | Change issues: state, assignee, labels (replace, add or remove), priority and more, or clear values with `-Clear`. |
-| `Remove-LinearIssue` | Move issues to the trash, or archive them with `-Archive`. |
-| `Get-LinearComment` | Comments on an issue, project, initiative or document, thread by thread. |
-| `Add-LinearComment` | Comment on an issue, project, initiative or document, or reply to a comment. |
-| `Set-LinearComment` | Edit a comment, or resolve or reopen its thread. |
-| `Remove-LinearComment` | Delete comments. |
-| `Get-LinearAttachment` | Attachments of issues: uploaded files, links and integration links. |
-| `Add-LinearAttachment` | Upload files to an issue (private by default) or link a URL to it, with optional metadata. |
-| `Set-LinearAttachment` | Change an attachment's title, subtitle or metadata. |
-| `Remove-LinearAttachment` | Remove attachments from issues. |
-| `Get-LinearIssueRelation` | Relations of an issue, seen from it: Blocks, BlockedBy, Related, DuplicateOf, DuplicatedBy. |
-| `Add-LinearIssueRelation` | Relate issues: blocks, blocked by, related or duplicate. |
-| `Remove-LinearIssueRelation` | Remove relations, by id or between two issues. |
 | `Get-LinearAgentSession` | Agent sessions (AI agents working on issues), with status and summary; read-only. |
-| `Get-LinearRateLimit` | Rate-limit status from the latest response. |
 | `Invoke-LinearGraphQL` | Run any GraphQL query or mutation. |
-
-Run `Get-Help <command> -Full` for parameters and more examples.
 
 ## How it works with the Linear API
 
@@ -302,16 +382,16 @@ Run `Get-Help <command> -Full` for parameters and more examples.
   retries rate-limited calls with exponential backoff (3 times by default, set with
   `Connect-Linear -MaxRetries`). `Get-LinearRateLimit` shows the remaining budget.
 - **Complexity.** Linear rejects any single query above 10,000 complexity points. Pages are
-  capped at 100 issues so a page stays well below that limit.
+  capped at 100 items, and nested lists are kept small, so every query stays well below that.
 - **Name lookups.** Team, workflow state, label, user, project, project status, project label,
   initiative and initiative label names are resolved to ids with cached queries (10 minutes;
-  states and labels per team). `Connect-Linear` and
-  `Disconnect-Linear` clear the caches, and a name that is not found triggers one refresh.
+  states and labels per team). `Connect-Linear` and `Disconnect-Linear` clear the caches, a
+  command that creates or renames something forgets the affected cache, and a name that is not
+  found triggers one refresh.
 - **Errors.** GraphQL errors are turned into PowerShell errors with the Linear error code in
-  the message. A missing issue in `Get-LinearIssue`, `Set-LinearIssue` or
-  `Remove-LinearIssue`, or a change Linear rejects, writes a non-terminating error so the rest
-  of the pipeline continues. Unknown names and invalid parameter combinations stop the
-  command.
+  the message. A missing item, or a change Linear rejects, writes a non-terminating error, so
+  the rest of the pipeline continues. Unknown names and invalid parameter combinations stop the
+  command before anything is sent.
 
 ## Development
 
@@ -323,11 +403,12 @@ src/
   GraphQL/                  operations (*.graphql) and Fragments/
 tests/                      Pester 5 tests (network calls are mocked)
 tools/validate-graphql.mjs  validates every operation against Linear's published schema
-build.ps1                   Build, Analyze, Test and Publish tasks
+tools/make_logo.py          draws assets/ (the logo) from its geometry
+build.ps1                   Analyze, Build, Test and Publish tasks
 ```
 
 ```powershell
-./build.ps1 -Bootstrap      # build, run PSScriptAnalyzer and the tests
+./build.ps1 -Bootstrap      # run PSScriptAnalyzer, build, and run the tests
 Import-Module ./output/PSLinear/PSLinear.psd1 -Force
 ```
 
@@ -339,6 +420,8 @@ weekly, so a deprecated or removed field is caught before users hit it:
 npm ci --prefix tools
 node tools/validate-graphql.mjs
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the conventions and how to propose a change.
 
 ### Releasing
 

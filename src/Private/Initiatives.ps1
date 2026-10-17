@@ -164,7 +164,8 @@ function Get-LinearInitiativeLabelCache {
     )
 
     if ($Refresh -or $null -eq $script:LinearInitiativeLabelCache -or [datetime]::UtcNow -ge $script:LinearInitiativeLabelCacheExpires) {
-        $script:LinearInitiativeLabelCache = @(Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListInitiativeLabels') -ConnectionPath 'initiativeLabels' -Limit 0 |
+        $query = Get-LinearGraphQLDocument -Name 'ListInitiativeLabels'
+        $script:LinearInitiativeLabelCache = @(Invoke-LinearPagedRequest -Query $query -ConnectionPath 'initiativeLabels' -Limit 0 |
                 Where-Object { $null -ne $_ -and -not $_.isGroup -and $null -eq (Get-LinearNestedValue -InputObject $_ -Name 'retiredAt') } |
                 ForEach-Object {
                     [pscustomobject]@{

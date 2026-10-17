@@ -254,7 +254,8 @@ Describe 'Connect-Linear -Browser' {
         }
 
         It 'explains how to install SecretManagement when it is missing' {
-            Remove-Item -Path Function:\Set-Secret
+            # Mocked rather than removed, so the test does not depend on whether SecretManagement is installed.
+            Mock -ModuleName PSLinear Get-Command { $null } -ParameterFilter { $Name -eq 'Set-Secret' }
             { Connect-Linear -Browser -ClientId 'client-1' -SecretName 'LinearSignIn' } | Should -Throw -ExpectedMessage '*Microsoft.PowerShell.SecretManagement*'
             Should -Invoke Wait-LinearOAuthCallback -ModuleName PSLinear -Times 0 -Exactly
         }

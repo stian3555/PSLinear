@@ -278,7 +278,8 @@ function Set-LinearInitiative {
                 if ($null -eq $link) {
                     if ($result.Errors.Count -gt 0) {
                         $message = Format-LinearFailureMessage -Message "Could not look up project $projectId in $($target.Name)." -Errors $result.Errors
-                        $PSCmdlet.WriteError((New-LinearErrorRecord -Message $message -ErrorId 'PSLinear.InitiativeProjectRemoveFailed' -Category ReadError -TargetObject $projectId))
+                        $PSCmdlet.WriteError((New-LinearErrorRecord -Message $message `
+                                    -ErrorId 'PSLinear.InitiativeProjectRemoveFailed' -Category ReadError -TargetObject $projectId))
                     }
                     continue
                 }

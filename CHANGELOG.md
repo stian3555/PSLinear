@@ -6,44 +6,58 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
-
-- `build.ps1` runs Analyze before Build by default, and retries the intermittent
-  PSScriptAnalyzer crash up to five times.
-- PSLinear has a logo, shown in the README and, through the manifest's `IconUri`, on the
-  PowerShell Gallery.
-
 ### Added
 
-- `Get-LinearComment`, `Add-LinearComment`, `Set-LinearComment` and `Remove-LinearComment`:
-  list the comments on issues and projects thread by thread, comment and reply (a reply to a
-  reply joins the same thread), edit comments, resolve or reopen threads (resolving through a
-  reply records it as the resolution) and delete comments.
-- `Get-LinearAttachment`, `Add-LinearAttachment`, `Set-LinearAttachment` and
-  `Remove-LinearAttachment`: list an issue's attachments, upload files (wildcards allowed,
-  private by default, `-Public` for images with a warning) or link URLs (with rich links for
-  integrations such as GitHub), rename them and remove them. The issue is checked before
-  anything is uploaded.
-- `Add-LinearComment -Attachment` uploads files and adds them to the comment: images are shown
-  in the comment, other files linked. `-Body` is optional when files are attached.
-- `Get-LinearIssueRelation`, `Add-LinearIssueRelation` and `Remove-LinearIssueRelation`: list an
-  issue's relations in both directions, seen from the issue (Blocks, BlockedBy, Related,
-  DuplicateOf, DuplicatedBy, Similar), relate issues, and remove relations by id, by object or
-  between two issues.
+**Signing in**
+
+- `Connect-Linear -Browser` signs in through Linear's consent page in the browser (OAuth 2.0
+  with PKCE and a local callback). It uses PSL, the project's public OAuth application, unless
+  `-ClientId` or `LINEAR_OAUTH_CLIENT_ID` names your own; `-Scope`, `-RedirectUri` and
+  `-TimeoutSeconds` adjust the sign-in. Access tokens are renewed automatically before they
+  expire, and `-SecretName` saves the refresh token in a SecretManagement vault so later
+  sessions sign in without the browser.
+- `Disconnect-Linear -Revoke` revokes an OAuth sign-in at Linear and removes the saved refresh
+  token.
+
+**Issues and git**
+
+- `Start-LinearIssue` assigns an issue to you, moves it to the team's first started state if
+  it has not started yet (or to `-State`), and checks out its git branch, creating it from the
+  current commit or `-From` when needed. `-NoBranch` skips git, for example to start several
+  issues at once.
+- `Get-LinearIssue -Current` returns the issue whose identifier is in the name of the
+  checked-out git branch.
 - `New-LinearIssue` and `Set-LinearIssue` take `-Cycle` (active, next, previous, +1/-1, a number,
   a name or an id), `-Milestone` (by name within the project) and `-Delegate` (an agent);
   `New-LinearIssue` also takes `-Template`. `Set-LinearIssue -Clear` can clear the milestone and
   delegate.
 - `Get-LinearIssue` filters by `-Cycle`, `-Milestone` and `-Delegate`, and issues include their
   milestone and delegate.
-- `Get-LinearTemplate` lists issue, project and document templates.
-- `Get-LinearMilestone`, `New-LinearMilestone`, `Set-LinearMilestone` and
-  `Remove-LinearMilestone`: list a project's (or every) milestone, create, rename, reschedule,
-  reorder, move and delete milestones.
-- Attachment metadata: `Add-LinearAttachment -Metadata` and `Set-LinearAttachment -Metadata` store
-  a hashtable of string and number values on an attachment (other value types are refused), and
-  attachments expose their `Metadata`, including what integrations store.
-- `-Project` parameters also accept a project's slug id and URL.
+
+**Comments, attachments and relations**
+
+- `Get-LinearComment`, `Add-LinearComment`, `Set-LinearComment` and `Remove-LinearComment`:
+  list the comments on issues, projects, initiatives and documents thread by thread, comment
+  and reply (a reply to a reply joins the same thread), edit comments, resolve or reopen
+  threads (resolving through a reply records it as the resolution) and delete comments.
+  Comments include the id of what they belong to.
+- `Get-LinearAttachment`, `Add-LinearAttachment`, `Set-LinearAttachment` and
+  `Remove-LinearAttachment`: list an issue's attachments, upload files (wildcards allowed,
+  private by default, `-Public` for images with a warning) or link URLs (with rich links for
+  integrations such as GitHub), rename them and remove them. The issue is checked before
+  anything is uploaded.
+- `Add-LinearAttachment -Metadata` and `Set-LinearAttachment -Metadata` store a hashtable of
+  string and number values on an attachment (other value types are refused), and attachments
+  expose their `Metadata`, including what integrations store.
+- `Add-LinearComment -Attachment` uploads files and adds them to the comment: images are shown
+  in the comment, other files linked. `-Body` is optional when files are attached.
+- `Get-LinearIssueRelation`, `Add-LinearIssueRelation` and `Remove-LinearIssueRelation`: list an
+  issue's relations in both directions, seen from the issue (Blocks, BlockedBy, Related,
+  DuplicateOf, DuplicatedBy, Similar), relate issues, and remove relations by id, by object or
+  between two issues.
+
+**Projects and milestones**
+
 - `New-LinearProject`, `Set-LinearProject` and `Remove-LinearProject`: create projects for one or
   more teams, change their name, summary, content, lead, status (by name or type), priority,
   dates, teams, labels and members (replace, add or remove), clear values, and move projects
@@ -52,39 +66,16 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - `Get-LinearProject` filters by `-Team` and `-Status`, and `-Id` (or piped projects) returns the
   full project with its content, members and initiatives. Projects include their health,
   priority, teams and labels.
-- `Connect-Linear -Browser` signs in through Linear's consent page in the browser (OAuth 2.0
-  with PKCE and a local callback). It uses PSL, the project's public OAuth application, unless
-  `-ClientId` or `LINEAR_OAUTH_CLIENT_ID` names your own; `-Scope`, `-RedirectUri` and
-  `-TimeoutSeconds` adjust the sign-in. Access tokens are
-  renewed automatically before they expire, and `-SecretName` saves the refresh token in a
-  SecretManagement vault so later sessions sign in without the browser.
-- `Disconnect-Linear -Revoke` revokes an OAuth sign-in at Linear and removes the saved refresh
-  token.
-- `Start-LinearIssue`: assigns an issue to you, moves it to the team's first started state if
-  it has not started yet (or to `-State`), and checks out its git branch, creating it from the
-  current commit or `-From` when needed. `-NoBranch` skips git, for example to start several
-  issues at once.
-- `Get-LinearIssue -Current` returns the issue whose identifier is in the name of the checked-out
-  git branch.
-- `Get-LinearAgentSession` lists agent sessions (newest first, filter by issue and status) and
-  gets them by id. It is read-only.
-- `New-LinearLabel`, `Set-LinearLabel` and `Remove-LinearLabel`: create workspace or team labels
-  and label groups, rename and recolor labels, move them in and out of groups, retire and
-  restore them, and delete them. Labels are found by name (optionally `Group/Name`) among the
-  workspace labels, or a team's own labels with `-Team`.
-- `Get-LinearLabel -IncludeGroups -IncludeRetired` also returns label groups and retired labels,
-  and labels include their `GroupId`.
-- `New-LinearTeam`, `Set-LinearTeam` and `Remove-LinearTeam`: create teams and sub-teams, change
-  their name, key, description, time zone or parent, and delete them.
-- `Get-LinearTeamMember`, `Add-LinearTeamMember` and `Remove-LinearTeamMember`: list team members
-  with their ownership, and add or remove users.
-- `Get-LinearDocument`, `New-LinearDocument`, `Set-LinearDocument` and `Remove-LinearDocument`:
-  list documents (all, or of an issue, project, initiative or team; filter by title), get one
-  with its Markdown content, create documents in an issue, project, initiative or team, rename
-  them, replace their content, change or clear the owner, move them to another container, and
-  move them to the trash.
-- `Get-LinearComment -Document` and `Add-LinearComment -Document` list and add comments on
-  documents, and piped documents work too. Comments include their `DocumentId`.
+- `Get-LinearProjectUpdate`, `New-LinearProjectUpdate`, `Set-LinearProjectUpdate` and
+  `Remove-LinearProjectUpdate`: list a project's status updates newest first, post updates with
+  a health, edit them and remove them.
+- `Get-LinearMilestone`, `New-LinearMilestone`, `Set-LinearMilestone` and
+  `Remove-LinearMilestone`: list a project's (or every) milestone, create, rename, reschedule,
+  reorder, move and delete milestones.
+- `-Project` parameters also accept a project's slug id and URL.
+
+**Initiatives**
+
 - `Get-LinearInitiative`, `New-LinearInitiative`, `Set-LinearInitiative` and
   `Remove-LinearInitiative`: list initiatives (filter by status, or get one in full with its
   content and sub-initiatives), create and change them with the owner, lead team and labels
@@ -92,11 +83,39 @@ and this project follows [Semantic Versioning](https://semver.org/).
   archive them.
 - `Get-LinearInitiativeUpdate`, `New-LinearInitiativeUpdate`, `Set-LinearInitiativeUpdate` and
   `Remove-LinearInitiativeUpdate`: list, post, edit and remove initiative status updates.
-- `Get-LinearComment -Initiative` and `Add-LinearComment -Initiative` list and add comments on
-  initiatives, and piped initiatives work too. Comments include their `InitiativeId`.
-- `Get-LinearProjectUpdate`, `New-LinearProjectUpdate`, `Set-LinearProjectUpdate` and
-  `Remove-LinearProjectUpdate`: list a project's status updates newest first, post updates with
-  a health, edit them and remove them.
+
+**Documents**
+
+- `Get-LinearDocument`, `New-LinearDocument`, `Set-LinearDocument` and `Remove-LinearDocument`:
+  list documents (all, or of an issue, project, initiative or team; filter by title), get one
+  with its Markdown content, create documents in an issue, project, initiative or team, rename
+  them, replace their content, change or clear the owner, move them to another container, and
+  move them to the trash.
+
+**Teams, labels and more**
+
+- `New-LinearTeam`, `Set-LinearTeam` and `Remove-LinearTeam`: create teams and sub-teams, change
+  their name, key, description, time zone or parent, and delete them.
+- `Get-LinearTeamMember`, `Add-LinearTeamMember` and `Remove-LinearTeamMember`: list team members
+  with their ownership, and add or remove users.
+- `New-LinearLabel`, `Set-LinearLabel` and `Remove-LinearLabel`: create workspace or team labels
+  and label groups, rename and recolor labels, move them in and out of groups, retire and
+  restore them, and delete them. Labels are found by name (optionally `Group/Name`) among the
+  workspace labels, or a team's own labels with `-Team`.
+- `Get-LinearLabel -IncludeGroups -IncludeRetired` also returns label groups and retired labels,
+  and labels include their `GroupId`.
+- `Get-LinearTemplate` lists issue, project and document templates.
+- `Get-LinearAgentSession` lists agent sessions (newest first, filter by issue and status) and
+  gets them by id. It is read-only.
+
+### Changed
+
+- `Disconnect-Linear` supports `-WhatIf` and `-Confirm`.
+- The project table view shows each project's health.
+- `build.ps1` runs Analyze before Build by default, and retries the intermittent
+  PSScriptAnalyzer crash up to five times.
+- PSLinear has a logo, shown in the README and, through the manifest's `IconUri`, on the
+  PowerShell Gallery.
 
 ## [0.1.0] - 2026-10-17
 

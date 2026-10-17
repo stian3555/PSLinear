@@ -15,7 +15,8 @@ function Get-LinearMilestoneCache {
     $entry = $script:LinearMilestoneCache[$ProjectId]
     if ($Refresh -or $null -eq $entry -or [datetime]::UtcNow -ge $entry.Expires) {
         $variables = @{ filter = @{ project = @{ id = @{ eq = $ProjectId } } } }
-        $milestones = @(Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListProjectMilestones') -ConnectionPath 'projectMilestones' -Limit 0 -Variables $variables |
+        $query = Get-LinearGraphQLDocument -Name 'ListProjectMilestones'
+        $milestones = @(Invoke-LinearPagedRequest -Query $query -ConnectionPath 'projectMilestones' -Limit 0 -Variables $variables |
                 ConvertTo-LinearMilestone |
                 Sort-Object -Property SortOrder)
         $entry = @{ Items = $milestones; Expires = [datetime]::UtcNow.Add($script:CacheLifetime) }

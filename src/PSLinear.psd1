@@ -5,7 +5,7 @@
     Author               = 'Stian Johansen'
     CompanyName          = 'Community'
     Copyright            = '(c) 2026 Stian Johansen. Released under the MIT License.'
-    Description          = 'Unofficial PowerShell module for the Linear (linear.app) GraphQL API. Pipeline-friendly cmdlets for issues, teams, projects, cycles, labels and users, with automatic paging, rate-limit handling and an escape hatch for raw GraphQL.'
+    Description          = 'Unofficial PowerShell module for the Linear (linear.app) GraphQL API. Pipeline-friendly cmdlets for issues with comments, attachments and relations; projects, milestones and status updates; initiatives; documents; teams, labels, cycles and users. Includes sign-in through the browser (OAuth with PKCE), git branch integration, automatic paging, rate-limit handling and an escape hatch for raw GraphQL.'
     PowerShellVersion    = '7.4'
     CompatiblePSEditions = @('Core')
     FormatsToProcess     = @('PSLinear.Format.ps1xml')
@@ -77,7 +77,7 @@
     AliasesToExport      = @()
     PrivateData          = @{
         PSData = @{
-            Tags         = @('Linear', 'LinearApp', 'GraphQL', 'IssueTracking', 'ProjectManagement', 'API', 'PSEdition_Core', 'Windows', 'Linux', 'MacOS')
+            Tags         = @('Linear', 'LinearApp', 'GraphQL', 'IssueTracking', 'ProjectManagement', 'API', 'OAuth', 'Git', 'PSEdition_Core', 'Windows', 'Linux', 'MacOS')
             LicenseUri   = 'https://github.com/stian3555/PSLinear/blob/main/LICENSE'
             ProjectUri   = 'https://github.com/stian3555/PSLinear'
             IconUri      = 'https://raw.githubusercontent.com/stian3555/PSLinear/main/assets/PSLinear-icon.png'
