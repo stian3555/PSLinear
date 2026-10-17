@@ -8,6 +8,13 @@ $script:LinearContext = $null
 $script:LinearRateLimit = $null
 $script:LinearTeamCache = $null
 $script:LinearTeamCacheExpires = [datetime]::MinValue
+$script:LinearUserCache = $null
+$script:LinearUserCacheExpires = [datetime]::MinValue
+$script:LinearProjectCache = $null
+$script:LinearProjectCacheExpires = [datetime]::MinValue
+# Per-team caches, keyed by team id: @{ Items = <objects>; Expires = <UTC datetime> }.
+$script:LinearWorkflowStateCache = @{}
+$script:LinearLabelCache = @{}
 $script:LinearDocumentCache = @{}
 
 $script:ModuleVersion = $ExecutionContext.SessionState.Module.Version
@@ -15,7 +22,20 @@ $script:UserAgent = 'PSLinear/{0} PowerShell/{1}' -f $script:ModuleVersion, $PSV
 $script:DefaultEndpoint = 'https://api.linear.app/graphql'
 $script:DefaultPageSize = 50
 $script:MaxPageSize = 100
-$script:TeamCacheLifetime = [timespan]::FromMinutes(10)
+$script:CacheLifetime = [timespan]::FromMinutes(10)
+# Error messages for unknown names list at most this many valid values.
+$script:MaxListedValues = 30
+
+# Workflow state categories in the order Linear shows them.
+$script:WorkflowStateTypeOrder = @{
+    triage    = 0
+    backlog   = 1
+    unstarted = 2
+    started   = 3
+    completed = 4
+    canceled  = 5
+    duplicate = 6
+}
 
 # Linear priority values (0-4) and their labels.
 $script:PriorityMap = [ordered]@{
@@ -68,4 +88,5 @@ $teamCompleter = {
         Write-Debug "Team completion failed: $($_.Exception.Message)"
     }
 }
-Register-ArgumentCompleter -CommandName 'Get-LinearIssue' -ParameterName 'Team' -ScriptBlock $teamCompleter
+$teamCommands = 'Get-LinearCycle', 'Get-LinearIssue', 'Get-LinearLabel', 'Get-LinearWorkflowState', 'New-LinearIssue', 'Set-LinearIssue'
+Register-ArgumentCompleter -CommandName $teamCommands -ParameterName 'Team' -ScriptBlock $teamCompleter

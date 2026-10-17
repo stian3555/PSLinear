@@ -26,6 +26,9 @@ function Get-LinearViewer {
     param()
 
     $data = Invoke-LinearRequest -Query (Get-LinearGraphQLDocument -Name 'Viewer')
-    ConvertTo-LinearUser -InputObject (Get-LinearNestedValue -InputObject $data -Name 'viewer') `
+    $viewer = ConvertTo-LinearUser -InputObject (Get-LinearNestedValue -InputObject $data -Name 'viewer') `
         -Organization (Get-LinearNestedValue -InputObject $data -Name 'organization')
+    # PSLinear.Viewer selects a view that shows the organization; it is still a PSLinear.User.
+    if ($null -ne $viewer) { $viewer.PSObject.TypeNames.Insert(0, 'PSLinear.Viewer') }
+    $viewer
 }

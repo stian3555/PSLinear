@@ -4,9 +4,9 @@
 [![PowerShell Gallery](https://img.shields.io/powershellgallery/v/PSLinear?include_prereleases&label=PowerShell%20Gallery)](https://www.powershellgallery.com/packages/PSLinear)
 [![Downloads](https://img.shields.io/powershellgallery/dt/PSLinear)](https://www.powershellgallery.com/packages/PSLinear)
 
-A PowerShell module for [Linear](https://linear.app). Query issues and teams with real objects
-you can pipe, filter and format, and use any part of the Linear GraphQL API when there is no
-dedicated cmdlet yet.
+A PowerShell module for [Linear](https://linear.app). Query, create and update issues with real
+objects you can pipe, filter and format, and use any part of the Linear GraphQL API when there
+is no dedicated cmdlet yet.
 
 ```powershell
 Get-LinearIssue -Assignee me -StateType Unstarted, Started
@@ -21,10 +21,18 @@ ENG-398      Todo             Medium      Ada Lovelace         Document the depl
 
 ## Features
 
-- **Pipeline-first.** Typed objects (`PSLinear.Issue`, `PSLinear.Team`) with flattened
-  properties for filtering and display, and the ids needed to chain commands.
+- **Pipeline-first.** Typed objects (`PSLinear.Issue`, `PSLinear.Team`, `PSLinear.Project`
+  and more) with flattened properties for filtering and display, and the ids needed to chain
+  commands.
 - **Readable filters.** `-Team ENG -State 'In Progress' -Assignee me -Label Bug` instead of
   hand-written GraphQL filters, with a raw `-Filter` for everything else.
+- **Names instead of ids.** Create and update issues with team keys, state, label, project
+  and user names, or `me`. A state type such as `started` or `completed` picks the right state
+  in every team, and issue URLs work wherever an identifier does. Lookups are cached, and an
+  unknown name fails with a list of the valid values.
+- **Safe changes.** `New-`, `Set-` and `Remove-LinearIssue` support `-WhatIf` (which sends
+  nothing at all) and `-Confirm`. `Remove-LinearIssue` asks first and moves issues to the
+  trash, where they can be restored for 30 days.
 - **Automatic paging.** Results stream page by page. `-First` sets a limit; `-All` follows
   pagination to the end. Stopping early (`| Select-Object -First 5`) stops the requests too.
 - **Handles the API's rules for you.** Retries rate-limited requests, server errors and
@@ -90,6 +98,12 @@ Get-LinearIssue -Team ENG -Label Bug -All | Group-Object State -NoElement | Sort
 # Current cycle for several teams
 Get-LinearTeam -Name ENG, OPS | Get-LinearIssue -CurrentCycle
 
+# What can I use? States, labels, projects and cycles of a team
+Get-LinearWorkflowState -Team ENG
+Get-LinearLabel -Team ENG
+Get-LinearProject | Where-Object Status -EQ 'In Progress' | Sort-Object TargetDate
+Get-LinearCycle -Team ENG -Previous -Active -Next
+
 # Unassigned issues that mention "login"
 Get-LinearIssue -Unassigned -Search login
 
@@ -101,9 +115,33 @@ Get-LinearIssue -Team ENG -All |
     Select-Object Identifier, Title, State, Assignee, PriorityLabel, Labels, UpdatedAt |
     Export-Csv -Path eng-issues.csv -NoTypeInformation
 
+# Create an issue; states, labels, projects and users are given by name
+New-LinearIssue -Team ENG -Title 'Login fails on Safari' -Label Bug -Priority High -Assignee me -State Todo
+
+# Create a sub-issue, due in a week
+New-LinearIssue -Team ENG -Title 'Write tests for the retry logic' -Parent ENG-412 -DueDate (Get-Date).AddDays(7)
+
+# Start work on an issue
+Set-LinearIssue ENG-412 -State 'In Progress' -Assignee me
+
+# Remove the due date and take the issue out of its cycle
+Set-LinearIssue ENG-412 -Clear DueDate, Cycle
+
+# Triage: assign every unassigned bug and add a label, keeping the existing labels
+Get-LinearIssue -Team ENG -Label Bug -Unassigned | Set-LinearIssue -Assignee 'grace@example.com' -AddLabel Triaged
+
+# Preview a bulk change without sending anything
+Get-LinearIssue -Assignee me -State 'In Review' | Set-LinearIssue -State Done -WhatIf
+
+# Close issues across teams whose done states have different names
+Get-LinearIssue -Label Duplicate -StateType Unstarted -All | Set-LinearIssue -State completed
+
+# Move issues to the trash (asks per issue unless -Confirm:$false); -Archive archives instead
+Get-LinearIssue -Team ENG -Label Spam -All | Remove-LinearIssue
+
 # Anything else: raw GraphQL, with -WhatIf for mutations
 Invoke-LinearGraphQL -Query '{ viewer { assignedIssues(first: 5) { nodes { identifier title } } } }'
-Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueArchive(id: $id) { success } }' -Variables @{ id = 'ENG-1' } -WhatIf
+Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { success } }' -Variables @{ id = 'ENG-1' } -WhatIf
 ```
 
 ## Commands
@@ -114,7 +152,15 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueArchive(id: $id) { su
 | `Disconnect-Linear` | Forget the credential and cached data. |
 | `Get-LinearViewer` | The authenticated user and organization. |
 | `Get-LinearTeam` | Teams, filterable by key or name with wildcards. |
-| `Get-LinearIssue` | Issues by identifier, or filtered lists with paging. |
+| `Get-LinearUser` | Users, filterable by name or email; `-IncludeDisabled` for deactivated users. |
+| `Get-LinearWorkflowState` | Workflow states per team, in workflow order, filterable by name or type. |
+| `Get-LinearLabel` | Labels in the workspace, or the labels a team can use. |
+| `Get-LinearProject` | Projects with status, lead, target date and progress. |
+| `Get-LinearCycle` | Cycles per team, with `-Active`, `-Next`, `-Previous` and `-Number`. |
+| `Get-LinearIssue` | Issues by identifier or URL, or filtered lists with paging. |
+| `New-LinearIssue` | Create an issue, with states, labels, projects and users given by name. |
+| `Set-LinearIssue` | Change issues: state, assignee, labels (replace, add or remove), priority and more, or clear values with `-Clear`. |
+| `Remove-LinearIssue` | Move issues to the trash, or archive them with `-Archive`. |
 | `Get-LinearRateLimit` | Rate-limit status from the latest response. |
 | `Invoke-LinearGraphQL` | Run any GraphQL query or mutation. |
 
@@ -129,9 +175,14 @@ Run `Get-Help <command> -Full` for parameters and more examples.
   `Connect-Linear -MaxRetries`). `Get-LinearRateLimit` shows the remaining budget.
 - **Complexity.** Linear rejects any single query above 10,000 complexity points. Pages are
   capped at 100 issues so a page stays well below that limit.
+- **Name lookups.** Team, workflow state, label, user and project names are resolved to ids
+  with cached queries (10 minutes; states and labels per team). `Connect-Linear` and
+  `Disconnect-Linear` clear the caches, and a name that is not found triggers one refresh.
 - **Errors.** GraphQL errors are turned into PowerShell errors with the Linear error code in
-  the message. A missing issue in `Get-LinearIssue` writes a non-terminating error so the rest
-  of the pipeline continues.
+  the message. A missing issue in `Get-LinearIssue`, `Set-LinearIssue` or
+  `Remove-LinearIssue`, or a change Linear rejects, writes a non-terminating error so the rest
+  of the pipeline continues. Unknown names and invalid parameter combinations stop the
+  command.
 
 ## Development
 
@@ -171,8 +222,8 @@ publish. A mistake means a new version, not a re-tag.
 
 ## Roadmap
 
-- `New-LinearIssue`, `Set-LinearIssue` (with `-WhatIf`), `Remove-LinearIssue` (archive or trash)
-- Comments, projects, cycles, labels, workflow states and users
+- Comments, issue relations, milestones and attachments
+- `-Cycle`, `-Milestone` and `-Delegate` on `New-LinearIssue` and `Set-LinearIssue`
 - Tab completion for `-State`, `-Label` and `-Assignee`
 - Markdown help with platyPS and an online help URI
 

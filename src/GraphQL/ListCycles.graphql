@@ -1,0 +1,26 @@
+query ListCycles($filter: CycleFilter, $first: Int, $after: String) {
+  cycles(filter: $filter, first: $first, after: $after) {
+    nodes {
+      id
+      number
+      name
+      startsAt
+      endsAt
+      completedAt
+      progress
+      isActive
+      isNext
+      isPrevious
+      isPast
+      isFuture
+      team {
+        id
+        key
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

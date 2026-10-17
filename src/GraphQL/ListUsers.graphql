@@ -1,0 +1,16 @@
+query ListUsers($first: Int, $after: String, $includeDisabled: Boolean) {
+  users(first: $first, after: $after, includeDisabled: $includeDisabled) {
+    nodes {
+      id
+      name
+      displayName
+      email
+      admin
+      active
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

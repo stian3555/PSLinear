@@ -1,0 +1,10 @@
+query GetIssueTeam($id: String!) {
+  issue(id: $id) {
+    id
+    identifier
+    team {
+      id
+      key
+    }
+  }
+}

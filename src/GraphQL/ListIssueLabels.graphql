@@ -1,0 +1,24 @@
+query ListIssueLabels($filter: IssueLabelFilter, $first: Int, $after: String) {
+  issueLabels(filter: $filter, first: $first, after: $after) {
+    nodes {
+      id
+      name
+      color
+      description
+      isGroup
+      retiredAt
+      parent {
+        id
+        name
+      }
+      team {
+        id
+        key
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}
