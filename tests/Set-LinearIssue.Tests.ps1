@@ -160,6 +160,35 @@ Describe 'Set-LinearIssue' {
             }
         }
 
+        It 'sends null for every field given to -Clear' {
+            Set-LinearIssue ENG-1 -Clear Estimate, DueDate, Parent, Project, Cycle
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                $issueInput = (Get-RequestBody $Body).variables.input
+                $issueInput.Count -eq 5 -and
+                @('estimate', 'dueDate', 'parentId', 'projectId', 'cycleId' | Where-Object { $issueInput.ContainsKey($_) -and $null -eq $issueInput[$_] }).Count -eq 5
+            }
+        }
+
+        It 'removes all labels with -Clear Labels, without looking up the team' {
+            Set-LinearIssue ENG-1 -Clear Labels
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                $request = Get-RequestBody $Body
+                $issueInput = $request.variables.input
+                (Get-RequestOperation $Body) -eq 'UpdateIssue' -and
+                $request.query -notmatch 'GetIssueTeam' -and
+                $issueInput.ContainsKey('labelIds') -and @($issueInput.labelIds).Count -eq 0
+            }
+        }
+
+        It 'combines -Clear with other changes' {
+            Set-LinearIssue ENG-1 -Clear DueDate -Priority High
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
+                $issueInput = (Get-RequestBody $Body).variables.input
+                $issueInput.Count -eq 2 -and $issueInput.priority -eq 2 -and $issueInput.ContainsKey('dueDate')
+            }
+        }
+
         It 'returns the updated issue with -PassThru' {
             $issue = Set-LinearIssue ENG-3 -Priority Low -PassThru
             $issue.Identifier | Should -Be 'ENG-3'
@@ -175,7 +204,7 @@ Describe 'Set-LinearIssue' {
 
         It 'sends no request for piped issue objects' {
             $existing = [pscustomobject]@{ PSTypeName = 'PSLinear.Issue'; Id = 'issue-1'; Identifier = 'ENG-1'; TeamId = 'team-eng' }
-            $existing | Set-LinearIssue -Unassign -WhatIf
+            $existing | Set-LinearIssue -Unassign -Clear Labels -WhatIf
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
         }
     }
@@ -225,6 +254,13 @@ Describe 'Set-LinearIssue' {
         It 'rejects -Label together with -AddLabel or -RemoveLabel' {
             { Set-LinearIssue ENG-1 -Label Bug -AddLabel Feature } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*'
             { Set-LinearIssue ENG-1 -Label Bug -RemoveLabel Feature } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*'
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
+        }
+
+        It 'rejects -Clear together with a value for the same field' {
+            { Set-LinearIssue ENG-1 -Clear Estimate -Estimate 3 } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*' -ExpectedMessage '*-Clear Estimate or -Estimate*'
+            { Set-LinearIssue ENG-1 -Clear Labels -AddLabel Bug } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*' -ExpectedMessage '*-Clear Labels or -AddLabel*'
+            { Set-LinearIssue ENG-1 -Clear Project, DueDate -DueDate '2026-12-24' } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*'
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
         }
 

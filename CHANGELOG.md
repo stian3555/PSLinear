@@ -18,7 +18,8 @@ and this project follows [Semantic Versioning](https://semver.org/).
   state, assignee, priority, labels, project, estimate, due date and parent issue.
 - `Set-LinearIssue`: change the same fields on issues given by identifier or piped in from
   `Get-LinearIssue`, add or remove labels (`-AddLabel`, `-RemoveLabel`), remove the assignee
-  (`-Unassign`) or move an issue to another team. Returns the issues with `-PassThru`.
+  (`-Unassign`), clear the estimate, due date, parent, project, cycle or labels (`-Clear`), or
+  move an issue to another team. Returns the issues with `-PassThru`.
 - `Remove-LinearIssue`: move issues to the trash, like deleting in the Linear app (restorable
   for 30 days), or archive them with `-Archive`. Asks for confirmation by default.
 - The write commands accept names for teams, workflow states, labels, projects and users

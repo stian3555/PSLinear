@@ -69,6 +69,11 @@ function Set-LinearIssue {
     .PARAMETER Parent
         The parent issue's identifier (ENG-123), id or URL, which makes this a sub-issue.
 
+    .PARAMETER Clear
+        Removes values from the issue: Estimate, DueDate, Parent, Project, Cycle, or Labels (all
+        labels). Use -Unassign to remove the assignee, and -Description '' to clear the
+        description.
+
     .PARAMETER PassThru
         Returns the updated issues.
 
@@ -91,6 +96,11 @@ function Set-LinearIssue {
         Set-LinearIssue ENG-123 -Team OPS -State Todo -PassThru
 
         Moves an issue to another team and returns it with its new identifier.
+
+    .EXAMPLE
+        Set-LinearIssue ENG-123 -Clear DueDate, Cycle
+
+        Removes the due date and takes the issue out of its cycle.
 
     .INPUTS
         System.String
@@ -160,21 +170,42 @@ function Set-LinearIssue {
         [ValidateNotNullOrEmpty()]
         [string] $Parent,
 
+        [ValidateSet('Estimate', 'DueDate', 'Parent', 'Project', 'Cycle', 'Labels')]
+        [string[]] $Clear,
+
         [switch] $PassThru
     )
 
     begin {
         $changeParameters = @(
             'Team', 'Title', 'Description', 'State', 'Assignee', 'Unassign', 'Priority'
-            'Label', 'AddLabel', 'RemoveLabel', 'Project', 'Estimate', 'DueDate', 'Parent'
+            'Label', 'AddLabel', 'RemoveLabel', 'Project', 'Estimate', 'DueDate', 'Parent', 'Clear'
         )
         $changes = Format-LinearChangeList -BoundParameters $PSBoundParameters -Name $changeParameters
+
+        # IssueUpdateInput fields that -Clear sets to null. Labels is cleared with an empty list.
+        $clearFields = @{
+            Estimate = 'estimate'
+            DueDate  = 'dueDate'
+            Parent   = 'parentId'
+            Project  = 'projectId'
+            Cycle    = 'cycleId'
+        }
+        $clearConflicts = @(foreach ($field in $Clear) {
+                $parameters = if ($field -eq 'Labels') { 'Label', 'AddLabel', 'RemoveLabel' } else { $field }
+                foreach ($parameter in $parameters) {
+                    if ($PSBoundParameters.ContainsKey($parameter)) { "Use either -Clear $field or -$parameter, not both." }
+                }
+            })
 
         $invalidMessage = if ($Assignee -and $Unassign) {
             'Use either -Assignee or -Unassign, not both.'
         }
         elseif ($Label -and ($AddLabel -or $RemoveLabel)) {
             'Use -Label to replace all labels, or -AddLabel and -RemoveLabel to change them, not both.'
+        }
+        elseif ($clearConflicts.Count -gt 0) {
+            $clearConflicts[0]
         }
         elseif (-not $changes) {
             'Specify at least one property to change, such as -State, -Assignee or -Title.'
@@ -232,6 +263,10 @@ function Set-LinearIssue {
                 if ($PSBoundParameters.ContainsKey('Estimate')) { $issueInput['estimate'] = $Estimate }
                 if ($PSBoundParameters.ContainsKey('DueDate')) { $issueInput['dueDate'] = ConvertTo-LinearTimelessDate -Date $DueDate }
                 if ($Parent) { $issueInput['parentId'] = ConvertTo-LinearIssueIdentifier -Value $Parent }
+                foreach ($field in $Clear) {
+                    if ($field -eq 'Labels') { $issueInput['labelIds'] = @() }
+                    else { $issueInput[$clearFields[$field]] = $null }
+                }
             }
             catch {
                 $PSCmdlet.ThrowTerminatingError($_)

@@ -117,6 +117,9 @@ New-LinearIssue -Team ENG -Title 'Write tests for the retry logic' -Parent ENG-4
 # Start work on an issue
 Set-LinearIssue ENG-412 -State 'In Progress' -Assignee me
 
+# Remove the due date and take the issue out of its cycle
+Set-LinearIssue ENG-412 -Clear DueDate, Cycle
+
 # Triage: assign every unassigned bug and add a label, keeping the existing labels
 Get-LinearIssue -Team ENG -Label Bug -Unassigned | Set-LinearIssue -Assignee 'grace@example.com' -AddLabel Triaged
 
@@ -144,7 +147,7 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { 
 | `Get-LinearTeam` | Teams, filterable by key or name with wildcards. |
 | `Get-LinearIssue` | Issues by identifier, or filtered lists with paging. |
 | `New-LinearIssue` | Create an issue, with states, labels, projects and users given by name. |
-| `Set-LinearIssue` | Change issues: state, assignee, labels (replace, add or remove), priority and more. |
+| `Set-LinearIssue` | Change issues: state, assignee, labels (replace, add or remove), priority and more, or clear values with `-Clear`. |
 | `Remove-LinearIssue` | Move issues to the trash, or archive them with `-Archive`. |
 | `Get-LinearRateLimit` | Rate-limit status from the latest response. |
 | `Invoke-LinearGraphQL` | Run any GraphQL query or mutation. |
@@ -208,7 +211,6 @@ publish. A mistake means a new version, not a re-tag.
 ## Roadmap
 
 - Comments, projects, cycles, labels, workflow states and users
-- Clearing the project, due date, estimate or parent with `Set-LinearIssue`
 - Tab completion for `-State`, `-Label` and `-Assignee`
 - Markdown help with platyPS and an online help URI
 
