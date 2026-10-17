@@ -13,10 +13,13 @@ function Connect-Linear {
         Microsoft.PowerShell.SecretManagement vault, or the LINEAR_API_KEY environment variable.
 
         With -Browser, Linear's consent page opens in your browser (OAuth 2.0 with PKCE, so no
-        client secret is involved) and PowerShell receives the result on a local address. This
-        needs the client id of a Linear OAuth application whose callback URLs include the
-        redirect URI (http://localhost:47821/callback unless you change -RedirectUri). Linear's
-        access tokens last 24 hours; PSLinear renews them automatically with the refresh token.
+        client secret is involved) and PowerShell receives the result on a local address. By
+        default you sign in through PSL, the PSLinear project's public OAuth application; the
+        tokens go straight to your PowerShell session and never to the project. To use your own
+        OAuth application instead, give its client id with -ClientId or LINEAR_OAUTH_CLIENT_ID;
+        its callback URLs must include the redirect URI (http://localhost:47821/callback unless
+        you change -RedirectUri). Linear's access tokens last 24 hours; PSLinear renews them
+        automatically with the refresh token.
         Add -SecretName to save the refresh token in a SecretManagement vault, so the next
         Connect-Linear -Browser -SecretName in a new session signs in without the browser.
 
@@ -38,9 +41,9 @@ function Connect-Linear {
         Signs in through Linear's consent page in the browser.
 
     .PARAMETER ClientId
-        The client id of the Linear OAuth application to sign in with (Settings > API > OAuth
-        applications in Linear). Defaults to the LINEAR_OAUTH_CLIENT_ID environment variable.
-        The client id is not a secret.
+        The client id of your own Linear OAuth application (Settings > API > OAuth applications
+        in Linear). Defaults to the LINEAR_OAUTH_CLIENT_ID environment variable, or else PSL, the
+        PSLinear project's public application. The client id is not a secret.
 
     .PARAMETER Scope
         The permissions to ask for: read, write, issues:create, comments:create,
@@ -105,15 +108,20 @@ function Connect-Linear {
         Connects with an OAuth access token.
 
     .EXAMPLE
-        Connect-Linear -Browser -ClientId 'a1b2c3d4e5f6...'
+        Connect-Linear -Browser
 
-        Signs in through the browser with your OAuth application.
+        Signs in through the browser, approving the PSL application on Linear's consent page.
 
     .EXAMPLE
         Connect-Linear -Browser -SecretName 'LinearSignIn'
 
-        Signs in with the client id from LINEAR_OAUTH_CLIENT_ID. The first time, the browser
-        opens; later sessions reuse the refresh token saved in the default vault.
+        Signs in through the browser the first time; later sessions reuse the refresh token
+        saved in the default vault and do not open the browser.
+
+    .EXAMPLE
+        Connect-Linear -Browser -ClientId 'a1b2c3d4e5f6...'
+
+        Signs in through your own OAuth application.
 
     .INPUTS
         None.
@@ -223,11 +231,8 @@ function Connect-Linear {
                 $scheme = $TokenType
             }
             'Browser' {
-                $resolvedClientId = if ($ClientId) { $ClientId } else { $env:LINEAR_OAUTH_CLIENT_ID }
-                if ([string]::IsNullOrWhiteSpace($resolvedClientId)) {
-                    throw ("Signing in through the browser needs the client id of a Linear OAuth application. Create one in Linear under Settings > API > OAuth applications, " +
-                        "add $($RedirectUri.AbsoluteUri) to its callback URLs, then pass -ClientId or set the LINEAR_OAUTH_CLIENT_ID environment variable.")
-                }
+                $resolvedClientId = @($ClientId, $env:LINEAR_OAUTH_CLIENT_ID, $script:DefaultOAuthClientId) |
+                    Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1
                 if ($SecretName -and -not (Get-Command -Name 'Set-Secret' -ErrorAction SilentlyContinue)) {
                     throw 'Saving the sign-in in a vault requires the Microsoft.PowerShell.SecretManagement module. Install it with: Install-PSResource Microsoft.PowerShell.SecretManagement'
                 }

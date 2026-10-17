@@ -185,10 +185,12 @@ Describe 'Connect-Linear -Browser' {
         $script:browserUrl | Should -Match 'scope=read%2Cwrite%2Cissues%3Acreate'
     }
 
-    It 'takes the client id from LINEAR_OAUTH_CLIENT_ID, and explains how to get one when it is missing' {
-        { Connect-Linear -Browser } | Should -Throw -ErrorId 'PSLinear.InvalidCredential*' -ExpectedMessage '*Settings > API > OAuth applications*http://localhost:47821/callback*'
+    It 'signs in through PSL by default, unless LINEAR_OAUTH_CLIENT_ID or -ClientId names another application' {
+        (Connect-Linear -Browser -PassThru).ClientId | Should -Be '410663939bc11881898c33ce6ba801db'
+        $script:browserUrl | Should -Match 'client_id=410663939bc11881898c33ce6ba801db'
         $env:LINEAR_OAUTH_CLIENT_ID = 'client-env'
         (Connect-Linear -Browser -PassThru).ClientId | Should -Be 'client-env'
+        (Connect-Linear -Browser -ClientId 'client-param' -PassThru).ClientId | Should -Be 'client-param'
     }
 
     It 'uses -RedirectUri for the callback and the token request' {

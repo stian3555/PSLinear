@@ -40,6 +40,9 @@ $script:OAuthAuthorizeUrl = 'https://linear.app/oauth/authorize'
 $script:OAuthTokenUrl = 'https://api.linear.app/oauth/token'
 $script:OAuthRevokeUrl = 'https://api.linear.app/oauth/revoke'
 $script:DefaultOAuthRedirectUri = 'http://localhost:47821/callback'
+# PSL, the public OAuth application of the PSLinear project. Its callback URLs are
+# http://localhost:47821/callback and http://127.0.0.1:47821/callback. A client id is not a secret.
+$script:DefaultOAuthClientId = '410663939bc11881898c33ce6ba801db'
 $script:DefaultPageSize = 50
 $script:MaxPageSize = 100
 $script:CacheLifetime = [timespan]::FromMinutes(10)
