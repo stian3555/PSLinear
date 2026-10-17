@@ -35,7 +35,6 @@
             LicenseUri   = 'https://github.com/stian3555/PSLinear/blob/main/LICENSE'
             ProjectUri   = 'https://github.com/stian3555/PSLinear'
             ReleaseNotes = 'https://github.com/stian3555/PSLinear/blob/main/CHANGELOG.md'
-            Prerelease   = 'preview1'
         }
     }
 }

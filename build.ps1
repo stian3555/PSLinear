@@ -93,7 +93,9 @@ function Invoke-Build {
     Set-Content -LiteralPath (Join-Path $outputPath "$moduleName.psm1") -Value $merged -Encoding utf8NoBOM
 
     $manifest = Test-ModuleManifest -Path (Join-Path $outputPath "$moduleName.psd1")
-    $prerelease = $manifest.PrivateData.PSData.Prerelease
+    # Stable versions have no Prerelease entry, and strict mode throws on a missing property.
+    $psData = $manifest.PrivateData.PSData
+    $prerelease = if ($psData.ContainsKey('Prerelease')) { $psData['Prerelease'] } else { $null }
     $version = if ($prerelease) { "$($manifest.Version)-$prerelease" } else { "$($manifest.Version)" }
     Write-Host "    Built $moduleName $version -> $outputPath"
 }

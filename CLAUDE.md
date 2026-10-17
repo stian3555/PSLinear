@@ -87,6 +87,31 @@ PowerShell 7.4+ only (`CompatiblePSEditions = Core`), cross-platform.
 
 ## Releasing
 
-- Bump `ModuleVersion` and `Prerelease` in `src/PSLinear.psd1` and the CHANGELOG.
-- Publish a GitHub release tagged `v<version>[-<prerelease>]`. `.github/workflows/publish.yml` verifies that the tag matches the manifest and publishes the module.
-- `build.ps1 -Task Publish` refuses to run while the manifest still contains the `OWNER` placeholder.
+Releases cannot be undone. A `v*` tag cannot be moved or deleted (repository ruleset, immutable releases), and a PowerShell Gallery version cannot be deleted, only unlisted. A mistake means a new version number. Get the user's explicit confirmation of the exact version before creating the release.
+
+**Version.**
+- Use Semantic Versioning: `MAJOR.MINOR.PATCH`, and previews as `<version>-previewN`.
+- The tag is `v<version>` or `v<version>-previewN`, and it must match the manifest.
+- Never reuse a version that has been tagged or published.
+
+**1. Release pull request.** `main` only accepts pull requests with green CI (Test on all three OSes, GraphQL contract), and only squash merges. Branch from an up-to-date `main` and change:
+- `src/PSLinear.psd1`: set `ModuleVersion`. For a preview, set `PrivateData.PSData.Prerelease = 'previewN'`. For a stable version, remove the `Prerelease` line (keep the `=` signs aligned).
+- `CHANGELOG.md`: rename `## [Unreleased]` to `## [<version>] - <yyyy-MM-dd>` and add a new empty `## [Unreleased]` above it. Update the link references at the bottom: `[Unreleased]` compares `v<version>...HEAD`, and `[<version>]` links the release, or the compare from the previous tag.
+
+**2. Checks before merging.**
+- `./build.ps1 -Bootstrap` passes, and `node tools/validate-graphql.mjs` passes against the latest schema.
+- Package dry run: `Compress-PSResource -Path output/PSLinear -DestinationPath <temp dir>` produces `PSLinear.<version>[-previewN].nupkg` containing only the module files, `GraphQL/`, `LICENSE` and `README.md`. Extract it and import the `.psd1` in a clean `pwsh -NoProfile`, then check the exported commands.
+- For a new major or minor version, confirm with `Find-PSResource -Name PSLinear -Repository PSGallery -Prerelease` that the version is not already on the Gallery.
+
+**3. Merge, then release from the merge commit.**
+- Squash-merge the pull request and fetch `main`.
+- Write release notes: the version's CHANGELOG section, plus `Install-PSResource -Name PSLinear` (with `-Prerelease` for previews).
+- Run `gh release create v<version> --target <merge commit sha> --title "PSLinear <version>" --notes-file <notes>`. Add `--prerelease` for previews.
+
+**4. Publishing.**
+- `.github/workflows/publish.yml` runs when the release is published. It uses the `psgallery` environment, which holds the `PSGALLERY_API_KEY` secret and only accepts `v*` tags.
+- The workflow checks that the tag matches the manifest, then runs `./build.ps1 -Task Build, Analyze, Test, Publish -Bootstrap`.
+- Follow it with `gh run watch <run id> --exit-status`. Then confirm with `Find-PSResource -Name PSLinear -Repository PSGallery` (add `-Prerelease` for previews), and save it with `Save-PSResource` to a temp folder to check that it imports.
+- If the workflow fails after the tag exists, fix the cause and release a new version. The tag cannot be reused.
+
+`build.ps1 -Task Publish` refuses to run while the manifest still contains the `OWNER` placeholder.

@@ -216,9 +216,15 @@ node tools/validate-graphql.mjs
 
 ### Releasing
 
-1. Update `ModuleVersion` (and `Prerelease`) in `src/PSLinear.psd1` and `CHANGELOG.md`.
-2. Create a GitHub release with a matching tag, for example `v0.1.0-preview1`.
-3. The `Publish` workflow builds, tests and publishes to the PowerShell Gallery.
+1. On a branch, set `ModuleVersion` in `src/PSLinear.psd1`. For a preview, also set
+   `Prerelease` (for example `preview2`); for a stable version, leave `Prerelease` out.
+2. In `CHANGELOG.md`, move the `Unreleased` entries under the new version and date, and update
+   the links at the bottom.
+3. Open a pull request and squash-merge it once CI passes.
+4. Create a GitHub release from `main` with the matching tag, for example `v0.2.0` or
+   `v0.2.0-preview1`, and mark previews as pre-releases.
+5. The `Publish` workflow checks that the tag matches the manifest, then builds, tests and
+   publishes to the PowerShell Gallery.
 
 Releases are immutable and `v*` tags cannot be moved or deleted, so check the version before you
 publish. A mistake means a new version, not a re-tag.
