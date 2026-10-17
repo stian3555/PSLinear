@@ -25,7 +25,9 @@ function New-LinearInitiative {
 
     .PARAMETER LeadTeam
         The team that leads the initiative: a team key, name or id. Linear derives the
-        initiative's visibility from it. Supports tab completion once connected.
+        initiative's visibility from it. This needs Linear's team initiatives feature, which not
+        every plan includes; without it, Linear refuses the initiative. Supports tab completion
+        once connected.
 
     .PARAMETER Status
         Proposed, Planned, Active, Completed or Canceled.

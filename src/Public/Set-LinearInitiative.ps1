@@ -39,8 +39,9 @@ function Set-LinearInitiative {
         The owner: 'me', an email address, a user id, or the user's full name or display name.
 
     .PARAMETER LeadTeam
-        The team that leads the initiative: a team key, name or id. Supports tab completion once
-        connected.
+        The team that leads the initiative: a team key, name or id. This needs Linear's team
+        initiatives feature, which not every plan includes; without it, Linear refuses the
+        change. Supports tab completion once connected.
 
     .PARAMETER Status
         Proposed, Planned, Active, Completed or Canceled.

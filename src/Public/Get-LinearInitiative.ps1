@@ -26,7 +26,7 @@ function Get-LinearInitiative {
 
     .PARAMETER Id
         One or more initiative ids, slug ids (the hex suffix of an initiative URL) or initiative
-        URLs. Returns the full initiatives.
+        URLs. Returns the full initiatives, including archived and trashed ones.
 
     .PARAMETER InputObject
         PSLinear.Initiative objects, typically from Get-LinearInitiative. Returns them again in

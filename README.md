@@ -254,7 +254,7 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { 
 | `Set-LinearProjectUpdate` | Edit a status update's text or health. |
 | `Remove-LinearProjectUpdate` | Remove status updates. |
 | `Get-LinearInitiative` | Initiatives with status, health, owner, projects and labels; `-Id` for the full initiative with content and sub-initiatives. |
-| `New-LinearInitiative` | Create an initiative, with owner, lead team and labels given by name. |
+| `New-LinearInitiative` | Create an initiative, with owner, labels and (on plans with team initiatives) lead team given by name. |
 | `Set-LinearInitiative` | Change initiatives (status, owner, dates, labels) and add or remove their projects. |
 | `Remove-LinearInitiative` | Move initiatives to the trash, or archive them with `-Archive`. |
 | `Get-LinearInitiativeUpdate` | Status updates of an initiative, or of every initiative, newest first. |
