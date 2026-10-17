@@ -50,6 +50,13 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - `Get-LinearProject` filters by `-Team` and `-Status`, and `-Id` (or piped projects) returns the
   full project with its content, members and initiatives. Projects include their health,
   priority, teams and labels.
+- `Get-LinearDocument`, `New-LinearDocument`, `Set-LinearDocument` and `Remove-LinearDocument`:
+  list documents (all, or of an issue, project, initiative or team; filter by title), get one
+  with its Markdown content, create documents in an issue, project, initiative or team, rename
+  them, replace their content, change or clear the owner, move them to another container, and
+  move them to the trash.
+- `Get-LinearComment -Document` and `Add-LinearComment -Document` list and add comments on
+  documents, and piped documents work too. Comments include their `DocumentId`.
 - `Get-LinearInitiative`, `New-LinearInitiative`, `Set-LinearInitiative` and
   `Remove-LinearInitiative`: list initiatives (filter by status, or get one in full with its
   content and sub-initiatives), create and change them with the owner, lead team and labels
