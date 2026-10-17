@@ -1,21 +1,7 @@
 query ListProjects($first: Int, $after: String, $includeArchived: Boolean) {
   projects(first: $first, after: $after, includeArchived: $includeArchived) {
     nodes {
-      id
-      name
-      slugId
-      url
-      progress
-      startDate
-      targetDate
-      archivedAt
-      status {
-        name
-      }
-      lead {
-        id
-        name
-      }
+      ...ProjectFields
     }
     pageInfo {
       hasNextPage

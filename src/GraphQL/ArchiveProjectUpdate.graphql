@@ -1,0 +1,5 @@
+mutation ArchiveProjectUpdate($id: String!) {
+  projectUpdateArchive(id: $id) {
+    success
+  }
+}

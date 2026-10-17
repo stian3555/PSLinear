@@ -1,0 +1,8 @@
+mutation CreateProject($input: ProjectCreateInput!) {
+  projectCreate(input: $input) {
+    success
+    project {
+      ...ProjectFields
+    }
+  }
+}

@@ -1,0 +1,16 @@
+fragment ProjectUpdateFields on ProjectUpdate {
+  id
+  body
+  health
+  url
+  createdAt
+  editedAt
+  user {
+    id
+    name
+  }
+  project {
+    id
+    name
+  }
+}

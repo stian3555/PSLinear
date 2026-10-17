@@ -1,0 +1,14 @@
+query ListProjectStatuses($first: Int, $after: String) {
+  projectStatuses(first: $first, after: $after) {
+    nodes {
+      id
+      name
+      type
+      position
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

@@ -1,0 +1,38 @@
+fragment ProjectFields on Project {
+  id
+  name
+  slugId
+  url
+  description
+  priority
+  priorityLabel
+  health
+  progress
+  startDate
+  targetDate
+  startedAt
+  completedAt
+  canceledAt
+  archivedAt
+  status {
+    id
+    name
+    type
+  }
+  lead {
+    id
+    name
+  }
+  teams(first: 20) {
+    nodes {
+      id
+      key
+    }
+  }
+  labels(first: 20) {
+    nodes {
+      id
+      name
+    }
+  }
+}

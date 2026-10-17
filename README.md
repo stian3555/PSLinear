@@ -104,7 +104,7 @@ Get-LinearTeam -Name ENG, OPS | Get-LinearIssue -CurrentCycle
 # What can I use? States, labels, projects and cycles of a team
 Get-LinearWorkflowState -Team ENG
 Get-LinearLabel -Team ENG
-Get-LinearProject | Where-Object Status -EQ 'In Progress' | Sort-Object TargetDate
+Get-LinearProject -Team ENG -Status started | Sort-Object TargetDate
 Get-LinearCycle -Team ENG -Previous -Active -Next
 
 # Unassigned issues that mention "login"
@@ -132,6 +132,14 @@ Get-LinearIssue -Team ENG -Cycle active -StateType Unstarted | Set-LinearIssue -
 
 # Start work on an issue
 Set-LinearIssue ENG-412 -State 'In Progress' -Assignee me
+
+# Create a project for two teams, then start it and post a status update
+New-LinearProject 'Checkout v2' -Team ENG, OPS -Lead me -TargetDate 2027-03-31 -Label Customer
+Set-LinearProject 'Checkout v2' -Status started -AddMember 'grace@example.com'
+New-LinearProjectUpdate -Project 'Checkout v2' 'Design approved; build starts Monday.' -Health OnTrack
+
+# Projects in progress whose latest update is not on track
+Get-LinearProject -Status started | Get-LinearProjectUpdate -First 1 | Where-Object Health -NE 'OnTrack'
 
 # Remove the due date and take the issue out of its cycle
 Set-LinearIssue ENG-412 -Clear DueDate, Cycle
@@ -178,7 +186,14 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { 
 | `Get-LinearUser` | Users, filterable by name or email; `-IncludeDisabled` for deactivated users. |
 | `Get-LinearWorkflowState` | Workflow states per team, in workflow order, filterable by name or type. |
 | `Get-LinearLabel` | Labels in the workspace, or the labels a team can use. |
-| `Get-LinearProject` | Projects with status, lead, target date and progress. |
+| `Get-LinearProject` | Projects with status, health, lead, teams, labels, dates and progress, filterable by team and status; `-Id` for the full project with content and members. |
+| `New-LinearProject` | Create a project, with teams, lead, members, status, labels and template given by name. |
+| `Set-LinearProject` | Change projects: status, lead, dates, priority, teams, labels and members (replace, add or remove), or clear values. |
+| `Remove-LinearProject` | Move projects to the trash; Linear archives their issues until the project is restored. |
+| `Get-LinearProjectUpdate` | Status updates of a project, or of every project, newest first. |
+| `New-LinearProjectUpdate` | Post a project status update with a health (OnTrack, AtRisk, OffTrack). |
+| `Set-LinearProjectUpdate` | Edit a status update's text or health. |
+| `Remove-LinearProjectUpdate` | Remove status updates. |
 | `Get-LinearCycle` | Cycles per team, with `-Active`, `-Next`, `-Previous` and `-Number`. |
 | `Get-LinearTemplate` | Issue, project and document templates, optionally those a team can use. |
 | `Get-LinearMilestone` | Milestones of a project, or of every project, with status, target date and progress. |
@@ -214,8 +229,8 @@ Run `Get-Help <command> -Full` for parameters and more examples.
   `Connect-Linear -MaxRetries`). `Get-LinearRateLimit` shows the remaining budget.
 - **Complexity.** Linear rejects any single query above 10,000 complexity points. Pages are
   capped at 100 issues so a page stays well below that limit.
-- **Name lookups.** Team, workflow state, label, user and project names are resolved to ids
-  with cached queries (10 minutes; states and labels per team). `Connect-Linear` and
+- **Name lookups.** Team, workflow state, label, user, project, project status and project
+  label names are resolved to ids with cached queries (10 minutes; states and labels per team). `Connect-Linear` and
   `Disconnect-Linear` clear the caches, and a name that is not found triggers one refresh.
 - **Errors.** GraphQL errors are turned into PowerShell errors with the Linear error code in
   the message. A missing issue in `Get-LinearIssue`, `Set-LinearIssue` or
@@ -267,6 +282,10 @@ publish. A mistake means a new version, not a re-tag.
 
 ## Roadmap
 
+- Initiatives and initiative updates
+- Documents
+- Creating and removing labels and teams
+- Git integration: start an issue on a new branch, and find the issue for the current branch
 - Tab completion for `-State`, `-Label` and `-Assignee`
 - Markdown help with platyPS and an online help URI
 
