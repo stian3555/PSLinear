@@ -31,7 +31,8 @@ PowerShell 7.4+ only (`CompatiblePSEditions = Core`), cross-platform.
 - Use `Invoke-LinearRequest` for single requests and `Invoke-LinearPagedRequest` for Relay connections.
 - They handle auth, GraphQL errors that arrive with HTTP 200, `RATELIMITED` (HTTP 400), 5xx retries and backoff.
 - File uploads use `Invoke-LinearFileUpload` (`Private/Uploads.ps1`): the `fileUpload` mutation, then a PUT of the file to the signed storage URL through `Send-LinearFileUpload`, with retries. That PUT is the only request that does not go to the GraphQL endpoint.
-- Do not call `Invoke-RestMethod` or `Invoke-WebRequest` anywhere except `Send-LinearHttpRequest` and `Send-LinearFileUpload`.
+- OAuth token, refresh and revoke calls are form-encoded and go through `Send-LinearOAuthRequest` (`Private/OAuth.ps1`). `Invoke-LinearRequest` renews an expiring OAuth token through `Update-LinearOAuthToken` before sending, and once more on an authentication error.
+- Do not call `Invoke-RestMethod` or `Invoke-WebRequest` anywhere except `Send-LinearHttpRequest`, `Send-LinearFileUpload` and `Send-LinearOAuthRequest`.
 - git runs only through `Invoke-LinearGit` (`Private/Git.ps1`), which tests mock with a fake repository. Never run git directly from a command.
 
 **Errors.**
@@ -69,6 +70,8 @@ PowerShell 7.4+ only (`CompatiblePSEditions = Core`), cross-platform.
 **Priority values.** 0 None, 1 Urgent, 2 High, 3 Medium, 4 Low (`$script:PriorityMap`).
 
 **Auth headers.** Personal API keys are sent as `Authorization: <key>` (no Bearer); OAuth tokens as `Bearer <token>`.
+
+**Browser sign-in.** `Connect-Linear -Browser` uses the authorization code flow with PKCE and no client secret. The local callback (`Wait-LinearOAuthCallback`) listens on both loopback addresses, and tests drive it with a mocked `Start-LinearOAuthBrowser` that sends the callback request. Never print tokens; the context keeps them as SecureStrings.
 
 ## Testing
 
