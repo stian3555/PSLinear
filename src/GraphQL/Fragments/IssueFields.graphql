@@ -1,0 +1,58 @@
+fragment IssueFields on Issue {
+  id
+  identifier
+  number
+  title
+  description
+  priority
+  priorityLabel
+  estimate
+  dueDate
+  url
+  branchName
+  createdAt
+  updatedAt
+  startedAt
+  completedAt
+  canceledAt
+  archivedAt
+  state {
+    id
+    name
+    type
+  }
+  assignee {
+    id
+    name
+    displayName
+    email
+  }
+  creator {
+    id
+    name
+  }
+  team {
+    id
+    key
+    name
+  }
+  project {
+    id
+    name
+  }
+  cycle {
+    id
+    number
+    name
+  }
+  parent {
+    id
+    identifier
+  }
+  labels(first: 20) {
+    nodes {
+      id
+      name
+    }
+  }
+}

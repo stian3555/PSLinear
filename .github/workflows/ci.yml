@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly run of the GraphQL contract check, to catch Linear schema changes early.
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    if: github.event_name != 'schedule'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: PSScriptAnalyzer
+        if: runner.os == 'Linux'
+        shell: pwsh
+        run: ./build.ps1 -Task Analyze -Bootstrap
+
+      - name: Build and test
+        shell: pwsh
+        run: ./build.ps1 -Task Build, Test -Bootstrap
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}
+          path: output/testResults.xml
+          if-no-files-found: ignore
+
+  graphql-contract:
+    name: GraphQL contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tools/package-lock.json
+
+      - name: Install tooling
+        run: npm ci --prefix tools
+
+      - name: Validate operations against the latest Linear schema
+        run: node tools/validate-graphql.mjs

@@ -1,0 +1,15 @@
+query Viewer {
+  viewer {
+    id
+    name
+    displayName
+    email
+    admin
+    active
+  }
+  organization {
+    id
+    name
+    urlKey
+  }
+}

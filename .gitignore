@@ -1,0 +1,12 @@
+# Build output
+output/
+
+# Tooling
+tools/node_modules/
+
+# Editors and OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,9 @@
+fragment TeamFields on Team {
+  id
+  key
+  name
+  description
+  visibility
+  createdAt
+  archivedAt
+}

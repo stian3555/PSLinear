@@ -1,0 +1,11 @@
+query ListTeams($first: Int, $after: String, $includeArchived: Boolean) {
+  teams(first: $first, after: $after, includeArchived: $includeArchived) {
+    nodes {
+      ...TeamFields
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

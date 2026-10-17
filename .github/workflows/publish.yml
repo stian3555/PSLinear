@@ -1,0 +1,42 @@
+name: Publish
+
+# Publishes to the PowerShell Gallery when a GitHub release is published.
+# The release tag must match the manifest, e.g. v0.1.0-preview1 or v0.1.0.
+#
+# One-time setup:
+#   1. Create an API key at https://www.powershellgallery.com/account/apikeys
+#      (scope: Push new packages and package versions, glob: PSLinear).
+#   2. In the GitHub repository: Settings > Environments > New environment "psgallery".
+#      Add the secret PSGALLERY_API_KEY there, and optionally require a reviewer.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: psgallery
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check that the release tag matches the manifest
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          $manifest = Import-PowerShellDataFile ./src/PSLinear.psd1
+          $prerelease = $manifest.PrivateData.PSData.Prerelease
+          $expected = if ($prerelease) { "v$($manifest.ModuleVersion)-$prerelease" } else { "v$($manifest.ModuleVersion)" }
+          if ($env:RELEASE_TAG -ne $expected) {
+            throw "Release tag '$($env:RELEASE_TAG)' does not match the manifest version '$expected'."
+          }
+
+      - name: Build, analyze, test and publish
+        shell: pwsh
+        env:
+          PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
+        run: ./build.ps1 -Task Build, Analyze, Test, Publish -Bootstrap

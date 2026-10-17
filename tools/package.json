@@ -1,0 +1,12 @@
+{
+  "name": "pslinear-tools",
+  "private": true,
+  "description": "Development tooling for PSLinear (GraphQL contract validation).",
+  "type": "module",
+  "scripts": {
+    "validate": "node validate-graphql.mjs"
+  },
+  "dependencies": {
+    "graphql": "^16.11.0"
+  }
+}
