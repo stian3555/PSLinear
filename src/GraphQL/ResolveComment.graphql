@@ -1,0 +1,8 @@
+mutation ResolveComment($id: String!, $resolvingCommentId: String) {
+  commentResolve(id: $id, resolvingCommentId: $resolvingCommentId) {
+    success
+    comment {
+      ...CommentFields
+    }
+  }
+}

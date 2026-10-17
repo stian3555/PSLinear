@@ -167,6 +167,11 @@ function Invoke-LinearPagedRequest {
         Dot-separated path from 'data' to the connection, for example 'issues' or 'team.issues'.
     .PARAMETER Limit
         Maximum number of nodes to return. Use 0 for no limit.
+    .PARAMETER IncludeErrors
+        Collect every page and return [pscustomobject]@{ Nodes; Errors } instead of streaming the
+        nodes and throwing on GraphQL errors. Paging stops at the first page with errors. Like
+        Invoke-LinearRequest -IncludeErrors, this lets callers write an expected error (such as
+        'not found') once, without catching a nested terminating error.
     #>
     [CmdletBinding()]
     param(
@@ -179,11 +184,14 @@ function Invoke-LinearPagedRequest {
         [System.Collections.IDictionary] $Variables = @{},
 
         [ValidateRange(0, [int]::MaxValue)]
-        [int] $Limit = $script:DefaultPageSize
+        [int] $Limit = $script:DefaultPageSize,
+
+        [switch] $IncludeErrors
     )
 
     $pageVariables = @{}
     foreach ($key in $Variables.Keys) { $pageVariables[$key] = $Variables[$key] }
+    $collected = [System.Collections.Generic.List[object]]::new()
 
     $remaining = if ($Limit -eq 0) { [int]::MaxValue } else { $Limit }
     $after = $null
@@ -194,13 +202,22 @@ function Invoke-LinearPagedRequest {
         $pageVariables['after'] = $after
         Write-Verbose "Fetching page $page ($($pageVariables['first']) items)."
 
-        $data = Invoke-LinearRequest -Query $Query -Variables $pageVariables
+        if ($IncludeErrors) {
+            $result = Invoke-LinearRequest -Query $Query -Variables $pageVariables -IncludeErrors
+            if ($result.Errors.Count -gt 0) {
+                return [pscustomobject]@{ Nodes = $collected.ToArray(); Errors = $result.Errors }
+            }
+            $data = $result.Data
+        }
+        else {
+            $data = Invoke-LinearRequest -Query $Query -Variables $pageVariables
+        }
         $connection = Get-LinearNestedValue -InputObject $data -Name $ConnectionPath
-        if ($null -eq $connection) { return }
+        if ($null -eq $connection) { break }
 
         foreach ($node in @(Get-LinearNestedValue -InputObject $connection -Name 'nodes')) {
             if ($null -eq $node) { continue }
-            $node
+            if ($IncludeErrors) { $collected.Add($node) } else { $node }
             $remaining--
             if ($remaining -le 0) { break }
         }
@@ -208,6 +225,10 @@ function Invoke-LinearPagedRequest {
         $hasNextPage = [bool](Get-LinearNestedValue -InputObject $connection -Name 'pageInfo.hasNextPage')
         $after = Get-LinearNestedValue -InputObject $connection -Name 'pageInfo.endCursor'
     } while ($remaining -gt 0 -and $hasNextPage -and $null -ne $after)
+
+    if ($IncludeErrors) {
+        [pscustomobject]@{ Nodes = $collected.ToArray(); Errors = @() }
+    }
 }
 
 function Get-LinearRetryDelay {

@@ -6,6 +6,14 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `Get-LinearComment`, `Add-LinearComment`, `Set-LinearComment` and `Remove-LinearComment`:
+  list the comments on issues and projects thread by thread, comment and reply (a reply to a
+  reply joins the same thread), edit comments, resolve or reopen threads (resolving through a
+  reply records it as the resolution) and delete comments.
+- `-Project` parameters also accept a project's slug id and URL.
+
 ## [0.1.0] - 2026-10-17
 
 First stable release. It includes everything in 0.1.0-preview1, plus the changes below.

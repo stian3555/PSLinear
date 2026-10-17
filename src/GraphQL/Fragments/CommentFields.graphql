@@ -1,0 +1,34 @@
+fragment CommentFields on Comment {
+  id
+  body
+  url
+  createdAt
+  updatedAt
+  editedAt
+  resolvedAt
+  quotedText
+  parentId
+  user {
+    id
+    name
+  }
+  botActor {
+    name
+    type
+  }
+  externalUser {
+    name
+  }
+  resolvingUser {
+    id
+    name
+  }
+  issue {
+    id
+    identifier
+  }
+  project {
+    id
+    name
+  }
+}

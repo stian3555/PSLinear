@@ -3,6 +3,7 @@ query ListProjects($first: Int, $after: String, $includeArchived: Boolean) {
     nodes {
       id
       name
+      slugId
       url
       progress
       startDate

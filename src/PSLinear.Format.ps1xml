@@ -392,6 +392,49 @@
       </TableControl>
     </View>
     <View>
+      <Name>PSLinear.Comment</Name>
+      <ViewSelectedBy>
+        <TypeName>PSLinear.Comment</TypeName>
+      </ViewSelectedBy>
+      <TableControl>
+        <TableHeaders>
+          <TableColumnHeader>
+            <Label>CreatedAt</Label>
+            <Width>16</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Author</Label>
+            <Width>18</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Thread</Label>
+            <Width>8</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Body</Label>
+          </TableColumnHeader>
+        </TableHeaders>
+        <TableRowEntries>
+          <TableRowEntry>
+            <TableColumnItems>
+              <TableColumnItem>
+                <ScriptBlock>if ($_.CreatedAt) { ([datetime]$_.CreatedAt).ToLocalTime().ToString('yyyy-MM-dd HH:mm') }</ScriptBlock>
+              </TableColumnItem>
+              <TableColumnItem>
+                <PropertyName>Author</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <ScriptBlock>if ($_.IsReply) { 'reply' } elseif ($_.Resolved) { 'resolved' } else { 'open' }</ScriptBlock>
+              </TableColumnItem>
+              <TableColumnItem>
+                <ScriptBlock>if ($_.Body) { ($_.Body -split '\r?\n')[0] }</ScriptBlock>
+              </TableColumnItem>
+            </TableColumnItems>
+          </TableRowEntry>
+        </TableRowEntries>
+      </TableControl>
+    </View>
+    <View>
       <Name>PSLinear.Context</Name>
       <ViewSelectedBy>
         <TypeName>PSLinear.Context</TypeName>

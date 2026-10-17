@@ -10,8 +10,10 @@
     CompatiblePSEditions = @('Core')
     FormatsToProcess     = @('PSLinear.Format.ps1xml')
     FunctionsToExport    = @(
+        'Add-LinearComment'
         'Connect-Linear'
         'Disconnect-Linear'
+        'Get-LinearComment'
         'Get-LinearCycle'
         'Get-LinearIssue'
         'Get-LinearLabel'
@@ -23,7 +25,9 @@
         'Get-LinearWorkflowState'
         'Invoke-LinearGraphQL'
         'New-LinearIssue'
+        'Remove-LinearComment'
         'Remove-LinearIssue'
+        'Set-LinearComment'
         'Set-LinearIssue'
     )
     CmdletsToExport      = @()

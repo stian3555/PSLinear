@@ -36,7 +36,7 @@ function Get-LinearProjectList {
 function Resolve-LinearProjectId {
     <#
     .SYNOPSIS
-        Resolves a project name or id to the project's id.
+        Resolves a project id, URL, slug id (the hex suffix of its URL) or name to the project's id.
     .NOTES
         Throws an ErrorRecord (PSLinear.ProjectNotFound or PSLinear.AmbiguousProject) that callers
         rethrow with $PSCmdlet.ThrowTerminatingError.
@@ -50,9 +50,14 @@ function Resolve-LinearProjectId {
 
     if (Test-LinearGuid -Value $Project) { return $Project }
 
+    # https://linear.app/acme/project/mobile-launch-272f50ef9250 -> slug id 272f50ef9250
+    $slugId = if ($Project -match '^https?://linear\.app/[^/]+/project/(?:[^/?#]*-)?([0-9a-f]+)(?:[/?#]|$)') { $Matches[1] } else { $Project }
+
     $match = @()
     foreach ($refresh in $false, $true) {
-        $match = @(Get-LinearProjectCache -Refresh:$refresh | Where-Object { $null -ne $_ -and $_.Name -eq $Project })
+        $projects = @(Get-LinearProjectCache -Refresh:$refresh | Where-Object { $null -ne $_ })
+        $match = @($projects | Where-Object { $_.SlugId -eq $slugId })
+        if ($match.Count -eq 0) { $match = @($projects | Where-Object { $_.Name -eq $Project }) }
         if ($match.Count -gt 0) { break }
     }
 

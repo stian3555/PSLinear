@@ -231,17 +231,17 @@ function Get-LinearTestLookupResponse {
     if ($query -match 'query ListProjects') {
         $projects = @(
             @{
-                id = 'project-web'; name = 'Website'; url = 'https://linear.app/acme/project/website'; status = @{ name = 'In Progress' }
+                id = 'project-web'; name = 'Website'; slugId = 'a1b2c3d4e5f6'; url = 'https://linear.app/acme/project/website-a1b2c3d4e5f6'; status = @{ name = 'In Progress' }
                 lead = @{ id = 'user-grace'; name = 'Grace Hopper' }; progress = 0.5; startDate = '2026-09-01'; targetDate = '2026-12-01'; archivedAt = $null
             }
             @{
-                id = 'project-mobile'; name = 'Mobile App'; url = 'https://linear.app/acme/project/mobile-app'; status = @{ name = 'Planned' }
+                id = 'project-mobile'; name = 'Mobile App'; slugId = 'f6e5d4c3b2a1'; url = 'https://linear.app/acme/project/mobile-app-f6e5d4c3b2a1'; status = @{ name = 'Planned' }
                 lead = $null; progress = 0; startDate = $null; targetDate = $null; archivedAt = $null
             }
         )
         if ($variables.includeArchived -eq $true) {
             $projects += @{
-                id = 'project-legacy'; name = 'Legacy'; url = 'https://linear.app/acme/project/legacy'; status = @{ name = 'Completed' }
+                id = 'project-legacy'; name = 'Legacy'; slugId = '0a0b0c0d0e0f'; url = 'https://linear.app/acme/project/legacy-0a0b0c0d0e0f'; status = @{ name = 'Completed' }
                 lead = $null; progress = 1; startDate = $null; targetDate = $null; archivedAt = '2026-01-01T00:00:00.000Z'
             }
         }
@@ -298,10 +298,120 @@ function New-LinearTestUserNode {
     }
 }
 
+function Get-RequestVariable {
+    # Returns a request variable by dot path ('input.issueId'), or $null when any part is missing.
+    # Safe under Set-StrictMode, which build.ps1 turns on and Pester inherits: there, reading a
+    # missing key of a parsed request with dot notation throws.
+    param([Parameter(Mandatory)][string] $Body, [Parameter(Mandatory)][string] $Path)
+    $current = (Get-RequestBody -Body $Body)['variables']
+    foreach ($segment in $Path.Split('.')) {
+        if ($current -isnot [System.Collections.IDictionary] -or -not $current.Contains($segment)) { return $null }
+        $current = $current[$segment]
+    }
+    $current
+}
+
 function Get-RequestOperation {
     # Returns the operation name of the GraphQL document passed to Send-LinearHttpRequest, such as 'CreateIssue'.
     param([Parameter(Mandatory)][string] $Body)
     $query = (Get-RequestBody -Body $Body).query
     if ($query -match '^\s*(query|mutation)\s+([_A-Za-z]\w*)') { return $Matches[2] }
+    $null
+}
+
+function New-LinearTestCommentNode {
+    param(
+        [string] $Id = 'comment-1',
+        [string] $Body = 'A comment',
+        [string] $Author = 'Ada Lovelace',
+        [string] $Bot,
+        [string] $ParentId,
+        [string] $Issue = 'ENG-1',
+        [string] $ProjectId,
+        [string] $CreatedAt = '2026-10-10T10:00:00.000Z',
+        [string] $ResolvedAt
+    )
+    [ordered]@{
+        id            = $Id
+        body          = $Body
+        url           = "https://linear.app/acme/comment/$Id"
+        createdAt     = $CreatedAt
+        updatedAt     = $CreatedAt
+        editedAt      = $null
+        resolvedAt    = if ($ResolvedAt) { $ResolvedAt } else { $null }
+        quotedText    = $null
+        parentId      = if ($ParentId) { $ParentId } else { $null }
+        user          = if ($Bot) { $null } else { @{ id = 'user-' + $Author.Split(' ')[0].ToLowerInvariant(); name = $Author } }
+        botActor      = if ($Bot) { @{ name = $Bot; type = 'github' } } else { $null }
+        externalUser  = $null
+        resolvingUser = if ($ResolvedAt) { @{ id = 'user-ada'; name = 'Ada Lovelace' } } else { $null }
+        issue         = if ($ProjectId) { $null } else { @{ id = "issue-$Issue"; identifier = $Issue } }
+        project       = if ($ProjectId) { @{ id = $ProjectId; name = 'Website' } } else { $null }
+    }
+}
+
+function Get-LinearTestCommentResponse {
+    # Serves the comment operations from a fixed set, or returns $null for any other request.
+    #
+    # ENG-1:   comment-3 (GitHub integration, resolved), comment-1 (Ada, open thread),
+    #          comment-4 (Ada, written after comment-1) and comment-2 (Grace, a reply to comment-1
+    #          written after comment-4); returned out of order
+    # Website: comment-p1 (Ada)
+    # ENG-404 and the comment id 'missing' do not exist. CreateComment rejects the body 'reject'.
+    param([Parameter(Mandatory)][hashtable] $Request)
+
+    $query = $Request.query
+    $variables = if ($Request.ContainsKey('variables')) { $Request.variables } else { @{} }
+    $comments = @{
+        'comment-1'  = New-LinearTestCommentNode -Id 'comment-1' -Body "First comment`nSecond line" -CreatedAt '2026-10-10T10:00:00.000Z'
+        'comment-2'  = New-LinearTestCommentNode -Id 'comment-2' -Body 'A reply' -Author 'Grace Hopper' -ParentId 'comment-1' -CreatedAt '2026-10-10T11:00:00.000Z'
+        'comment-3'  = New-LinearTestCommentNode -Id 'comment-3' -Body 'Linked a pull request' -Bot 'GitHub' -CreatedAt '2026-10-09T09:00:00.000Z' -ResolvedAt '2026-10-09T12:00:00.000Z'
+        'comment-4'  = New-LinearTestCommentNode -Id 'comment-4' -Body 'Another thread' -CreatedAt '2026-10-10T10:30:00.000Z'
+        'comment-p1' = New-LinearTestCommentNode -Id 'comment-p1' -Body 'Project kickoff' -ProjectId 'project-web'
+    }
+    $notFound = New-LinearTestError -Message 'Entity not found: Comment' -Code 'INPUT_ERROR'
+
+    if ($query -match 'query ListIssueComments') {
+        if ($variables.id -eq 'ENG-404') {
+            return New-LinearTestResponse -Data $null -Errors @(New-LinearTestError -Message 'Entity not found: Issue' -Code 'INPUT_ERROR' -Path 'issue')
+        }
+        $nodes = if ($variables.id -in 'ENG-1', 'issue-ENG-1') { @($comments['comment-2'], $comments['comment-4'], $comments['comment-1'], $comments['comment-3']) } else { @() }
+        return New-LinearTestResponse -Data @{ issue = @{ comments = New-LinearTestConnection -Nodes $nodes } }
+    }
+    if ($query -match 'query ListComments') {
+        $nodes = if ($variables.filter.project.id.eq -eq 'project-web') { @($comments['comment-p1']) } else { @() }
+        return New-LinearTestResponse -Data @{ comments = New-LinearTestConnection -Nodes $nodes }
+    }
+    if ($query -match 'query GetComment') {
+        if (-not $comments.ContainsKey($variables.id)) { return New-LinearTestResponse -Data $null -Errors @($notFound) }
+        return New-LinearTestResponse -Data @{ comment = $comments[$variables.id] }
+    }
+    if ($query -match 'mutation CreateComment') {
+        $commentInput = $variables.input
+        if ($commentInput['body'] -eq 'reject') {
+            return New-LinearTestResponse -Data @{ commentCreate = $null } -Errors @(New-LinearTestError -Message 'Argument Validation Error' -Code 'INPUT_ERROR')
+        }
+        $issueValue = if ($commentInput['issueId']) { $commentInput['issueId'] -replace '^issue-', '' } else { 'ENG-1' }
+        $node = New-LinearTestCommentNode -Id 'comment-new' -Body $commentInput['body'] -ParentId $commentInput['parentId'] -Issue $issueValue -ProjectId $commentInput['projectId']
+        return New-LinearTestResponse -Data @{ commentCreate = @{ success = $true; comment = $node } }
+    }
+    if ($query -match 'mutation UpdateComment') {
+        if (-not $comments.ContainsKey($variables.id)) { return New-LinearTestResponse -Data @{ commentUpdate = $null } -Errors @($notFound) }
+        $node = $comments[$variables.id]
+        $node['body'] = $variables.input.body
+        $node['editedAt'] = '2026-10-17T10:00:00.000Z'
+        return New-LinearTestResponse -Data @{ commentUpdate = @{ success = $true; comment = $node } }
+    }
+    if ($query -match 'mutation (Resolve|Unresolve)Comment') {
+        $field = if ($query -match 'mutation ResolveComment') { 'commentResolve' } else { 'commentUnresolve' }
+        if (-not $comments.ContainsKey($variables.id)) { return New-LinearTestResponse -Data @{ $field = $null } -Errors @($notFound) }
+        $node = $comments[$variables.id]
+        $node['resolvedAt'] = if ($field -eq 'commentResolve') { '2026-10-17T10:00:00.000Z' } else { $null }
+        return New-LinearTestResponse -Data @{ $field = @{ success = $true; comment = $node } }
+    }
+    if ($query -match 'mutation DeleteComment') {
+        if (-not $comments.ContainsKey($variables.id)) { return New-LinearTestResponse -Data @{ commentDelete = $null } -Errors @($notFound) }
+        return New-LinearTestResponse -Data @{ commentDelete = @{ success = $true; entityId = $variables.id } }
+    }
     $null
 }
