@@ -17,7 +17,19 @@ function New-LinearContext {
         [uri] $Endpoint = $script:DefaultEndpoint,
 
         [ValidateRange(0, 10)]
-        [int] $MaxRetries = 3
+        [int] $MaxRetries = 3,
+
+        # OAuth sign-ins through the browser: the refresh token, when the access token expires,
+        # the OAuth application, and the SecretManagement secret the refresh token is saved to.
+        [securestring] $RefreshToken,
+
+        [Nullable[datetimeoffset]] $ExpiresAt,
+
+        [string] $ClientId,
+
+        [string] $SecretName,
+
+        [string] $Vault
     )
 
     [pscustomobject]@{
@@ -30,7 +42,12 @@ function New-LinearContext {
         Endpoint     = $Endpoint.AbsoluteUri
         MaxRetries   = $MaxRetries
         ConnectedAt  = [datetimeoffset]::Now
+        ExpiresAt    = $ExpiresAt
+        ClientId     = $(if ($ClientId) { $ClientId } else { $null })
+        SecretName   = $(if ($SecretName) { $SecretName } else { $null })
+        Vault        = $(if ($Vault) { $Vault } else { $null })
         Token        = $Token
+        RefreshToken = $RefreshToken
     }
 }
 

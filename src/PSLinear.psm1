@@ -33,6 +33,13 @@ $script:LinearDocumentCache = @{}
 $script:ModuleVersion = $ExecutionContext.SessionState.Module.Version
 $script:UserAgent = 'PSLinear/{0} PowerShell/{1}' -f $script:ModuleVersion, $PSVersionTable.PSVersion
 $script:DefaultEndpoint = 'https://api.linear.app/graphql'
+
+# OAuth 2.0 endpoints (authorization code flow with PKCE) and the default redirect URI, which must
+# be registered as a callback URL in the OAuth application.
+$script:OAuthAuthorizeUrl = 'https://linear.app/oauth/authorize'
+$script:OAuthTokenUrl = 'https://api.linear.app/oauth/token'
+$script:OAuthRevokeUrl = 'https://api.linear.app/oauth/revoke'
+$script:DefaultOAuthRedirectUri = 'http://localhost:47821/callback'
 $script:DefaultPageSize = 50
 $script:MaxPageSize = 100
 $script:CacheLifetime = [timespan]::FromMinutes(10)

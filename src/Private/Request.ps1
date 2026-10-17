@@ -113,6 +113,14 @@ function Invoke-LinearRequest {
     )
 
     $context = Get-LinearContext
+    if (Test-LinearTokenExpiring -Context $context) {
+        try {
+            Update-LinearOAuthToken -Context $context
+        }
+        catch {
+            $PSCmdlet.ThrowTerminatingError($_)
+        }
+    }
 
     $payload = [ordered]@{ query = $Query }
     if ($OperationName) { $payload['operationName'] = $OperationName }
@@ -127,6 +135,7 @@ function Invoke-LinearRequest {
 
     $maxRetries = $context.MaxRetries
     $attempt = 0
+    $renewed = $false
     while ($true) {
         $attempt++
 
@@ -167,6 +176,19 @@ function Invoke-LinearRequest {
         }
 
         $isAuthError = ($response.StatusCode -eq 401) -or (@($errors | Where-Object Code -EQ 'AUTHENTICATION_ERROR').Count -gt 0)
+        if ($isAuthError -and -not $renewed -and $context.AuthScheme -eq 'OAuth' -and $null -ne $context.RefreshToken) {
+            # The access token may have been revoked or expired early: renew it once and retry.
+            $renewed = $true
+            try {
+                Update-LinearOAuthToken -Context $context
+            }
+            catch {
+                $PSCmdlet.ThrowTerminatingError($_)
+            }
+            $headers['Authorization'] = Get-LinearAuthorizationValue -Context $context
+            $attempt--
+            continue
+        }
         if ($isAuthError) {
             $message = 'Linear rejected the credentials. Check that the API key or access token is valid and not revoked, then run Connect-Linear again.'
             $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message $message -ErrorId 'PSLinear.AuthenticationFailed' `
