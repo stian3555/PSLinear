@@ -5,17 +5,22 @@
     Author               = 'Stian Johansen'
     CompanyName          = 'Community'
     Copyright            = '(c) 2026 Stian Johansen. Released under the MIT License.'
-    Description          = 'Unofficial PowerShell module for the Linear (linear.app) GraphQL API. Pipeline-friendly cmdlets for issues and teams, with automatic paging, rate-limit handling and an escape hatch for raw GraphQL.'
+    Description          = 'Unofficial PowerShell module for the Linear (linear.app) GraphQL API. Pipeline-friendly cmdlets for issues, teams, projects, cycles, labels and users, with automatic paging, rate-limit handling and an escape hatch for raw GraphQL.'
     PowerShellVersion    = '7.4'
     CompatiblePSEditions = @('Core')
     FormatsToProcess     = @('PSLinear.Format.ps1xml')
     FunctionsToExport    = @(
         'Connect-Linear'
         'Disconnect-Linear'
+        'Get-LinearCycle'
         'Get-LinearIssue'
+        'Get-LinearLabel'
+        'Get-LinearProject'
         'Get-LinearRateLimit'
         'Get-LinearTeam'
+        'Get-LinearUser'
         'Get-LinearViewer'
+        'Get-LinearWorkflowState'
         'Invoke-LinearGraphQL'
         'New-LinearIssue'
         'Remove-LinearIssue'

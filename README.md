@@ -21,8 +21,9 @@ ENG-398      Todo             Medium      Ada Lovelace         Document the depl
 
 ## Features
 
-- **Pipeline-first.** Typed objects (`PSLinear.Issue`, `PSLinear.Team`) with flattened
-  properties for filtering and display, and the ids needed to chain commands.
+- **Pipeline-first.** Typed objects (`PSLinear.Issue`, `PSLinear.Team`, `PSLinear.Project`
+  and more) with flattened properties for filtering and display, and the ids needed to chain
+  commands.
 - **Readable filters.** `-Team ENG -State 'In Progress' -Assignee me -Label Bug` instead of
   hand-written GraphQL filters, with a raw `-Filter` for everything else.
 - **Names instead of ids.** Create and update issues with team keys, state, label, project
@@ -97,6 +98,12 @@ Get-LinearIssue -Team ENG -Label Bug -All | Group-Object State -NoElement | Sort
 # Current cycle for several teams
 Get-LinearTeam -Name ENG, OPS | Get-LinearIssue -CurrentCycle
 
+# What can I use? States, labels, projects and cycles of a team
+Get-LinearWorkflowState -Team ENG
+Get-LinearLabel -Team ENG
+Get-LinearProject | Where-Object Status -EQ 'In Progress' | Sort-Object TargetDate
+Get-LinearCycle -Team ENG -Previous -Active -Next
+
 # Unassigned issues that mention "login"
 Get-LinearIssue -Unassigned -Search login
 
@@ -145,7 +152,12 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { 
 | `Disconnect-Linear` | Forget the credential and cached data. |
 | `Get-LinearViewer` | The authenticated user and organization. |
 | `Get-LinearTeam` | Teams, filterable by key or name with wildcards. |
-| `Get-LinearIssue` | Issues by identifier, or filtered lists with paging. |
+| `Get-LinearUser` | Users, filterable by name or email; `-IncludeDisabled` for deactivated users. |
+| `Get-LinearWorkflowState` | Workflow states per team, in workflow order, filterable by name or type. |
+| `Get-LinearLabel` | Labels in the workspace, or the labels a team can use. |
+| `Get-LinearProject` | Projects with status, lead, target date and progress. |
+| `Get-LinearCycle` | Cycles per team, with `-Active`, `-Next`, `-Previous` and `-Number`. |
+| `Get-LinearIssue` | Issues by identifier or URL, or filtered lists with paging. |
 | `New-LinearIssue` | Create an issue, with states, labels, projects and users given by name. |
 | `Set-LinearIssue` | Change issues: state, assignee, labels (replace, add or remove), priority and more, or clear values with `-Clear`. |
 | `Remove-LinearIssue` | Move issues to the trash, or archive them with `-Archive`. |
@@ -210,7 +222,8 @@ publish. A mistake means a new version, not a re-tag.
 
 ## Roadmap
 
-- Comments, projects, cycles, labels, workflow states and users
+- Comments, issue relations, milestones and attachments
+- `-Cycle`, `-Milestone` and `-Delegate` on `New-LinearIssue` and `Set-LinearIssue`
 - Tab completion for `-State`, `-Label` and `-Assignee`
 - Markdown help with platyPS and an online help URI
 

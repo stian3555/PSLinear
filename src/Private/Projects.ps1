@@ -10,13 +10,27 @@ function Get-LinearProjectCache {
     )
 
     if ($Refresh -or $null -eq $script:LinearProjectCache -or [datetime]::UtcNow -ge $script:LinearProjectCacheExpires) {
-        $query = Get-LinearGraphQLDocument -Name 'ListProjects'
-        $script:LinearProjectCache = @(Invoke-LinearPagedRequest -Query $query -ConnectionPath 'projects' -Limit 0 |
-                ConvertTo-LinearProject |
-                Sort-Object -Property Name)
+        $script:LinearProjectCache = @(Get-LinearProjectList)
         $script:LinearProjectCacheExpires = [datetime]::UtcNow.Add($script:CacheLifetime)
     }
     $script:LinearProjectCache
+}
+
+function Get-LinearProjectList {
+    <#
+    .SYNOPSIS
+        Fetches the workspace's projects, sorted by name. Archived projects are included only with -IncludeArchived.
+    #>
+    [CmdletBinding()]
+    [OutputType('PSLinear.Project')]
+    param(
+        [switch] $IncludeArchived
+    )
+
+    Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListProjects') -ConnectionPath 'projects' -Limit 0 `
+        -Variables @{ includeArchived = [bool]$IncludeArchived } |
+        ConvertTo-LinearProject |
+        Sort-Object -Property Name
 }
 
 function Resolve-LinearProjectId {

@@ -30,6 +30,10 @@ and this project follows [Semantic Versioning](https://semver.org/).
   `-Priority` accepts the numbers 0 to 4 as well as names.
 - `Get-LinearTeam` with wildcard filtering, and tab completion for `-Team`.
 - `Get-LinearViewer` and `Get-LinearRateLimit`.
+- `Get-LinearUser`, `Get-LinearWorkflowState`, `Get-LinearLabel`, `Get-LinearProject` and
+  `Get-LinearCycle` list the values the issue commands accept, with wildcard filtering and tab
+  completion for `-Team`.
 - `Invoke-LinearGraphQL` for any query or mutation; mutations support `-WhatIf` and `-Confirm`.
 - Automatic retries with exponential backoff for rate limits, server errors and network failures.
-- Formatting views for issues, teams, users, the connection and rate-limit status.
+- Formatting views for issues, teams, users, workflow states, labels, projects, cycles, the
+  connection and rate-limit status.

@@ -10,13 +10,27 @@ function Get-LinearUserCache {
     )
 
     if ($Refresh -or $null -eq $script:LinearUserCache -or [datetime]::UtcNow -ge $script:LinearUserCacheExpires) {
-        $query = Get-LinearGraphQLDocument -Name 'ListUsers'
-        $script:LinearUserCache = @(Invoke-LinearPagedRequest -Query $query -ConnectionPath 'users' -Limit 0 |
-                ForEach-Object { ConvertTo-LinearUser -InputObject $_ } |
-                Sort-Object -Property Name)
+        $script:LinearUserCache = @(Get-LinearUserList)
         $script:LinearUserCacheExpires = [datetime]::UtcNow.Add($script:CacheLifetime)
     }
     $script:LinearUserCache
+}
+
+function Get-LinearUserList {
+    <#
+    .SYNOPSIS
+        Fetches the workspace's users, sorted by name. Disabled users are included only with -IncludeDisabled.
+    #>
+    [CmdletBinding()]
+    [OutputType('PSLinear.User')]
+    param(
+        [switch] $IncludeDisabled
+    )
+
+    Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListUsers') -ConnectionPath 'users' -Limit 0 `
+        -Variables @{ includeDisabled = [bool]$IncludeDisabled } |
+        ForEach-Object { ConvertTo-LinearUser -InputObject $_ } |
+        Sort-Object -Property Name
 }
 
 function Get-LinearViewerId {

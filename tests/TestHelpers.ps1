@@ -126,8 +126,10 @@ function Get-LinearTestLookupResponse {
     # States:   ENG Backlog, Todo, In Progress, In Review, Done, Canceled, Duplicate; OPS Todo, Doing, Done
     # Labels:   workspace Bug, Feature, group Area with Frontend, retired Old;
     #           ENG Backend; OPS Incident and a second Frontend
-    # Users:    Ada Lovelace (the viewer), Grace Hopper, and two users named Alex Smith
-    # Projects: Website, Mobile App
+    # Users:    Ada Lovelace (the viewer), Grace Hopper, two users named Alex Smith, and the
+    #           disabled Old Timer (only with includeDisabled)
+    # Projects: Website, Mobile App, and the archived Legacy (only with includeArchived)
+    # Cycles:   ENG 10 (past), 11 (previous), 12 (active), 13 (next); OPS 3 (active)
     param([Parameter(Mandatory)][hashtable] $Request)
 
     $query = $Request.query
@@ -176,7 +178,8 @@ function Get-LinearTestLookupResponse {
     }
 
     if ($query -match 'query ListIssueLabels') {
-        $teamId = $variables.filter.or[1].team.id.eq
+        # Without a filter every label is returned; with one, workspace labels and that team's.
+        $teamId = if ($variables.ContainsKey('filter')) { $variables.filter.or[1].team.id.eq } else { $null }
         $engTeam = @{ id = 'team-eng'; key = 'ENG' }
         $opsTeam = @{ id = 'team-ops'; key = 'OPS' }
         $areaGroup = @{ id = 'label-area'; name = 'Area' }
@@ -191,7 +194,7 @@ function Get-LinearTestLookupResponse {
             @{ id = 'label-ops-frontend'; name = 'Frontend'; isGroup = $false; retiredAt = $null; parent = $null; team = $opsTeam }
         )
         $nodes = foreach ($label in $all) {
-            if ($null -ne $label.team -and $label.team.id -ne $teamId) { continue }
+            if ($null -ne $teamId -and $null -ne $label.team -and $label.team.id -ne $teamId) { continue }
             $label['color'] = '#000000'
             $label['description'] = $null
             $label
@@ -200,14 +203,18 @@ function Get-LinearTestLookupResponse {
     }
 
     if ($query -match 'query ListUsers') {
-        return New-LinearTestResponse -Data @{
-            users = New-LinearTestConnection -Nodes @(
-                (New-LinearTestUserNode -Id 'user-ada' -Name 'Ada Lovelace' -DisplayName 'ada' -Email 'ada@example.com'),
-                (New-LinearTestUserNode -Id 'user-grace' -Name 'Grace Hopper' -DisplayName 'grace' -Email 'grace@example.com'),
-                (New-LinearTestUserNode -Id 'user-alex-1' -Name 'Alex Smith' -DisplayName 'alex1' -Email 'alex.one@example.com'),
-                (New-LinearTestUserNode -Id 'user-alex-2' -Name 'Alex Smith' -DisplayName 'alex2' -Email 'alex.two@example.com')
-            )
+        $users = @(
+            (New-LinearTestUserNode -Id 'user-ada' -Name 'Ada Lovelace' -DisplayName 'ada' -Email 'ada@example.com'),
+            (New-LinearTestUserNode -Id 'user-grace' -Name 'Grace Hopper' -DisplayName 'grace' -Email 'grace@example.com'),
+            (New-LinearTestUserNode -Id 'user-alex-1' -Name 'Alex Smith' -DisplayName 'alex1' -Email 'alex.one@example.com'),
+            (New-LinearTestUserNode -Id 'user-alex-2' -Name 'Alex Smith' -DisplayName 'alex2' -Email 'alex.two@example.com')
+        )
+        if ($variables.includeDisabled -eq $true) {
+            $disabled = New-LinearTestUserNode -Id 'user-old' -Name 'Old Timer' -DisplayName 'old' -Email 'old@example.com'
+            $disabled['active'] = $false
+            $users += $disabled
         }
+        return New-LinearTestResponse -Data @{ users = New-LinearTestConnection -Nodes $users }
     }
 
     if ($query -match 'query Viewer') {
@@ -218,12 +225,53 @@ function Get-LinearTestLookupResponse {
     }
 
     if ($query -match 'query ListProjects') {
-        return New-LinearTestResponse -Data @{
-            projects = New-LinearTestConnection -Nodes @(
-                @{ id = 'project-web'; name = 'Website'; url = 'https://linear.app/acme/project/website'; status = @{ name = 'In Progress' } }
-                @{ id = 'project-mobile'; name = 'Mobile App'; url = 'https://linear.app/acme/project/mobile-app'; status = @{ name = 'Planned' } }
-            )
+        $projects = @(
+            @{
+                id = 'project-web'; name = 'Website'; url = 'https://linear.app/acme/project/website'; status = @{ name = 'In Progress' }
+                lead = @{ id = 'user-grace'; name = 'Grace Hopper' }; progress = 0.5; startDate = '2026-09-01'; targetDate = '2026-12-01'; archivedAt = $null
+            }
+            @{
+                id = 'project-mobile'; name = 'Mobile App'; url = 'https://linear.app/acme/project/mobile-app'; status = @{ name = 'Planned' }
+                lead = $null; progress = 0; startDate = $null; targetDate = $null; archivedAt = $null
+            }
+        )
+        if ($variables.includeArchived -eq $true) {
+            $projects += @{
+                id = 'project-legacy'; name = 'Legacy'; url = 'https://linear.app/acme/project/legacy'; status = @{ name = 'Completed' }
+                lead = $null; progress = 1; startDate = $null; targetDate = $null; archivedAt = '2026-01-01T00:00:00.000Z'
+            }
         }
+        return New-LinearTestResponse -Data @{ projects = New-LinearTestConnection -Nodes $projects }
+    }
+
+    if ($query -match 'query ListCycles') {
+        $filter = if ($variables.ContainsKey('filter')) { $variables.filter } else { @{} }
+        $cycles = @(
+            # Deliberately not sorted, so sorting is tested.
+            @{ id = 'cycle-ops-3'; number = 3; team = 'team-ops'; flags = @('isActive') }
+            @{ id = 'cycle-eng-12'; number = 12; team = 'team-eng'; flags = @('isActive') }
+            @{ id = 'cycle-eng-10'; number = 10; team = 'team-eng'; flags = @('isPast') }
+            @{ id = 'cycle-eng-13'; number = 13; team = 'team-eng'; flags = @('isNext', 'isFuture') }
+            @{ id = 'cycle-eng-11'; number = 11; team = 'team-eng'; flags = @('isPrevious', 'isPast') }
+        )
+        $nodes = foreach ($cycle in $cycles) {
+            if ($filter.ContainsKey('team') -and $filter.team.id.eq -ne $cycle.team) { continue }
+            if ($filter.ContainsKey('number') -and $cycle.number -notin $filter.number.in) { continue }
+            if ($filter.ContainsKey('or') -and -not @($filter.or | Where-Object { @($_.Keys)[0] -in $cycle.flags }).Count) { continue }
+            $node = [ordered]@{
+                id          = $cycle.id
+                number      = $cycle.number
+                name        = $null
+                startsAt    = '2026-10-12T00:00:00.000Z'
+                endsAt      = '2026-10-26T00:00:00.000Z'
+                completedAt = $null
+                progress    = 0.25
+                team        = @{ id = $cycle.team; key = $(if ($cycle.team -eq 'team-ops') { 'OPS' } else { 'ENG' }) }
+            }
+            foreach ($flag in 'isActive', 'isNext', 'isPrevious', 'isPast', 'isFuture') { $node[$flag] = $flag -in $cycle.flags }
+            $node
+        }
+        return New-LinearTestResponse -Data @{ cycles = New-LinearTestConnection -Nodes @($nodes) }
     }
 
     $null

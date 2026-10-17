@@ -17,23 +17,39 @@ function Get-LinearLabelCache {
 
     $entry = $script:LinearLabelCache[$TeamId]
     if ($Refresh -or $null -eq $entry -or [datetime]::UtcNow -ge $entry.Expires) {
-        $query = Get-LinearGraphQLDocument -Name 'ListIssueLabels'
-        $variables = @{
-            filter = @{
-                or = @(
-                    @{ team = @{ null = $true } }
-                    @{ team = @{ id = @{ eq = $TeamId } } }
-                )
-            }
-        }
-        $labels = @(Invoke-LinearPagedRequest -Query $query -ConnectionPath 'issueLabels' -Limit 0 -Variables $variables |
-                ConvertTo-LinearLabel |
-                Where-Object { $null -ne $_ -and -not $_.IsGroup -and $null -eq $_.RetiredAt } |
-                Sort-Object -Property Name)
-        $entry = @{ Items = $labels; Expires = [datetime]::UtcNow.Add($script:CacheLifetime) }
+        $entry = @{ Items = @(Get-LinearLabelList -TeamId $TeamId); Expires = [datetime]::UtcNow.Add($script:CacheLifetime) }
         $script:LinearLabelCache[$TeamId] = $entry
     }
     $entry.Items
+}
+
+function Get-LinearLabelList {
+    <#
+    .SYNOPSIS
+        Fetches the labels that can be applied to issues, sorted by name.
+    .DESCRIPTION
+        With -TeamId, returns workspace labels and that team's labels; without it, every label
+        in the workspace. Label groups and retired labels are left out.
+    #>
+    [CmdletBinding()]
+    [OutputType('PSLinear.Label')]
+    param(
+        [string] $TeamId
+    )
+
+    $variables = @{}
+    if ($TeamId) {
+        $variables['filter'] = @{
+            or = @(
+                @{ team = @{ null = $true } }
+                @{ team = @{ id = @{ eq = $TeamId } } }
+            )
+        }
+    }
+    Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListIssueLabels') -ConnectionPath 'issueLabels' -Limit 0 -Variables $variables |
+        ConvertTo-LinearLabel |
+        Where-Object { $null -ne $_ -and -not $_.IsGroup -and $null -eq $_.RetiredAt } |
+        Sort-Object -Property Name
 }
 
 function Resolve-LinearLabelId {
