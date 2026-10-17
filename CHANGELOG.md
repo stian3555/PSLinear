@@ -10,6 +10,8 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 - `build.ps1` runs Analyze before Build by default, and retries the intermittent
   PSScriptAnalyzer crash up to five times.
+- PSLinear has a logo, shown in the README and, through the manifest's `IconUri`, on the
+  PowerShell Gallery.
 
 ### Added
 

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/PSLinear.png" alt="PSLinear logo" width="200">
+</p>
+
 # PSLinear
 
 [![CI](https://github.com/stian3555/PSLinear/actions/workflows/ci.yml/badge.svg)](https://github.com/stian3555/PSLinear/actions/workflows/ci.yml)
