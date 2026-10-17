@@ -1,0 +1,11 @@
+query ListDocuments($filter: DocumentFilter, $first: Int, $after: String, $includeArchived: Boolean) {
+  documents(filter: $filter, first: $first, after: $after, includeArchived: $includeArchived, orderBy: updatedAt) {
+    nodes {
+      ...DocumentFields
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

@@ -1,0 +1,13 @@
+query ListDocumentComments($id: String!, $first: Int, $after: String) {
+  document(id: $id) {
+    comments(first: $first, after: $after) {
+      nodes {
+        ...CommentFields
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

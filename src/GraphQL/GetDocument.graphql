@@ -1,0 +1,6 @@
+query GetDocument($id: String!) {
+  document(id: $id) {
+    ...DocumentFields
+    content
+  }
+}

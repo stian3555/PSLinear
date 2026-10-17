@@ -1,0 +1,9 @@
+mutation UpdateDocument($id: String!, $input: DocumentUpdateInput!) {
+  documentUpdate(id: $id, input: $input) {
+    success
+    document {
+      ...DocumentFields
+      content
+    }
+  }
+}

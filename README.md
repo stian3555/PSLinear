@@ -146,6 +146,10 @@ New-LinearInitiative 'Q1 growth' -Owner me -Status Active -TargetDate 2027-03-31
     Set-LinearInitiative -AddProject 'Checkout v2', Website
 New-LinearInitiativeUpdate -Initiative 'Q1 growth' 'Checkout v2 is on track; Website slipped a week.' -Health AtRisk
 
+# Write a project document from a Markdown file, then read it back
+New-LinearDocument 'Launch plan' -Project 'Checkout v2' -Content (Get-Content ./launch-plan.md -Raw)
+Get-LinearDocument -Project 'Checkout v2' -Title 'Launch plan' | Get-LinearDocument | Select-Object -ExpandProperty Content
+
 # Remove the due date and take the issue out of its cycle
 Set-LinearIssue ENG-412 -Clear DueDate, Cycle
 
@@ -207,6 +211,10 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { 
 | `New-LinearInitiativeUpdate` | Post an initiative status update with a health. |
 | `Set-LinearInitiativeUpdate` | Edit an initiative status update's text or health. |
 | `Remove-LinearInitiativeUpdate` | Remove initiative status updates. |
+| `Get-LinearDocument` | Documents of an issue, project, initiative or team, or all of them, most recently updated first; `-Id` for the content. |
+| `New-LinearDocument` | Create a document in an issue, project, initiative or team. |
+| `Set-LinearDocument` | Rename a document, replace its content, change its owner or move it. |
+| `Remove-LinearDocument` | Move documents to the trash. |
 | `Get-LinearCycle` | Cycles per team, with `-Active`, `-Next`, `-Previous` and `-Number`. |
 | `Get-LinearTemplate` | Issue, project and document templates, optionally those a team can use. |
 | `Get-LinearMilestone` | Milestones of a project, or of every project, with status, target date and progress. |
@@ -217,8 +225,8 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { 
 | `New-LinearIssue` | Create an issue, with states, labels, projects, milestones, cycles, users and templates given by name. |
 | `Set-LinearIssue` | Change issues: state, assignee, labels (replace, add or remove), priority and more, or clear values with `-Clear`. |
 | `Remove-LinearIssue` | Move issues to the trash, or archive them with `-Archive`. |
-| `Get-LinearComment` | Comments on an issue, project or initiative, thread by thread. |
-| `Add-LinearComment` | Comment on an issue, project or initiative, or reply to a comment. |
+| `Get-LinearComment` | Comments on an issue, project, initiative or document, thread by thread. |
+| `Add-LinearComment` | Comment on an issue, project, initiative or document, or reply to a comment. |
 | `Set-LinearComment` | Edit a comment, or resolve or reopen its thread. |
 | `Remove-LinearComment` | Delete comments. |
 | `Get-LinearAttachment` | Attachments of issues: uploaded files, links and integration links. |
@@ -296,7 +304,6 @@ publish. A mistake means a new version, not a re-tag.
 
 ## Roadmap
 
-- Documents
 - Creating and removing labels and teams
 - Git integration: start an issue on a new branch, and find the issue for the current branch
 - Tab completion for `-State`, `-Label` and `-Assignee`

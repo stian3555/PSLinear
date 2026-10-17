@@ -1,15 +1,16 @@
 function Get-LinearCommentTarget {
     <#
     .SYNOPSIS
-        Works out what a comment command acts on: an issue, a project or an initiative.
+        Works out what a comment command acts on: an issue, a project, an initiative or a document.
     .DESCRIPTION
-        Returns [pscustomobject]@{ Kind; Id; Name }. Kind is Issue, Project or Initiative, Id is
-        what the API accepts (an issue identifier or UUID, a project or initiative UUID) and Name
-        is for messages.
+        Returns [pscustomobject]@{ Kind; Id; Name; ContentId }. Kind is Issue, Project, Initiative
+        or Document, Id is what the API accepts (an issue identifier or UUID, a project or
+        initiative UUID, a document id or slug id) and Name is for messages. ContentId is the
+        document content id that new comments on a document are attached to.
 
         Without -Resolve no request is sent, so it is safe before ShouldProcess; a project or
-        initiative given by name then has no Id yet. With -Resolve, names, slug ids and URLs are
-        resolved.
+        initiative given by name then has no Id yet, and a document given as text no ContentId.
+        With -Resolve, names, slug ids and URLs are resolved and documents are looked up.
     .NOTES
         Throws an ErrorRecord (PSLinear.InvalidArgument, or the project and initiative resolvers'
         errors) that callers rethrow with $PSCmdlet.ThrowTerminatingError.
@@ -22,6 +23,8 @@ function Get-LinearCommentTarget {
         [string] $Project,
 
         [string] $Initiative,
+
+        [string] $Document,
 
         [AllowNull()]
         [object] $InputObject,
@@ -44,6 +47,20 @@ function Get-LinearCommentTarget {
         return [pscustomobject]@{ Kind = 'Initiative'; Id = $initiativeId; Name = "initiative '$Initiative'" }
     }
 
+    if ($Document) {
+        $reference = ConvertFrom-LinearDocumentUrl -Value $Document
+        $contentId = $null
+        if ($Resolve) {
+            $detail = Get-LinearDocumentDetail -Id $reference
+            if ($null -eq $detail.Document) {
+                $message = Format-LinearFailureMessage -Message "Document '$Document' was not found." -Errors $detail.Errors
+                throw (New-LinearErrorRecord -Message $message -ErrorId 'PSLinear.DocumentNotFound' -Category ObjectNotFound -TargetObject $Document)
+            }
+            $contentId = Get-LinearNestedValue -InputObject $detail.Document -Name 'documentContentId'
+        }
+        return [pscustomobject]@{ Kind = 'Document'; Id = $reference; Name = "document $reference"; ContentId = $contentId }
+    }
+
     if ($null -ne $InputObject) {
         $typeNames = @($InputObject.PSObject.TypeNames)
         $objectId = Get-LinearNestedValue -InputObject $InputObject -Name 'Id'
@@ -59,22 +76,31 @@ function Get-LinearCommentTarget {
             $name = Get-LinearNestedValue -InputObject $InputObject -Name 'Name'
             return [pscustomobject]@{ Kind = 'Initiative'; Id = $objectId; Name = "initiative '$(if ($name) { $name } else { $objectId })'" }
         }
+        if ($typeNames -contains 'PSLinear.Document') {
+            $title = Get-LinearNestedValue -InputObject $InputObject -Name 'Title'
+            return [pscustomobject]@{
+                Kind      = 'Document'
+                Id        = $objectId
+                Name      = "document '$(if ($title) { $title } else { $objectId })'"
+                ContentId = Get-LinearNestedValue -InputObject $InputObject -Name 'DocumentContentId'
+            }
+        }
     }
 
-    throw (New-LinearErrorRecord -Message ('Comments belong to an issue, a project or an initiative. Use -Issue, -Project or -Initiative, ' +
-            'or pipe in PSLinear.Issue, PSLinear.Project or PSLinear.Initiative objects.') `
+    throw (New-LinearErrorRecord -Message ('Comments belong to an issue, a project, an initiative or a document. Use -Issue, -Project, ' +
+            '-Initiative or -Document, or pipe in PSLinear.Issue, PSLinear.Project, PSLinear.Initiative or PSLinear.Document objects.') `
             -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument -TargetObject $InputObject)
 }
 
 function Get-LinearCommentList {
     <#
     .SYNOPSIS
-        Fetches every comment on an issue, project or initiative, thread by thread.
+        Fetches every comment on an issue, project, initiative or document, thread by thread.
     .DESCRIPTION
         Returns [pscustomobject]@{ Comments; Errors }. Threads are ordered by their first comment,
         oldest first, and each thread's replies follow its first comment in the order they were
-        written, as the Linear app shows them. Errors holds the GraphQL errors when the issue
-        does not exist, so the caller can write one non-terminating error.
+        written, as the Linear app shows them. Errors holds the GraphQL errors when the issue or
+        document does not exist, so the caller can write one non-terminating error.
     #>
     [CmdletBinding()]
     [OutputType([pscustomobject])]
@@ -85,6 +111,10 @@ function Get-LinearCommentList {
 
     $result = if ($Target.Kind -eq 'Issue') {
         Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListIssueComments') -ConnectionPath 'issue.comments' `
+            -Variables @{ id = $Target.Id } -Limit 0 -IncludeErrors
+    }
+    elseif ($Target.Kind -eq 'Document') {
+        Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListDocumentComments') -ConnectionPath 'document.comments' `
             -Variables @{ id = $Target.Id } -Limit 0 -IncludeErrors
     }
     else {

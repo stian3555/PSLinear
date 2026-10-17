@@ -1,0 +1,39 @@
+fragment DocumentFields on Document {
+  id
+  title
+  slugId
+  url
+  icon
+  createdAt
+  updatedAt
+  archivedAt
+  documentContentId
+  creator {
+    id
+    name
+  }
+  owner {
+    id
+    name
+  }
+  updatedBy {
+    id
+    name
+  }
+  project {
+    id
+    name
+  }
+  issue {
+    id
+    identifier
+  }
+  initiative {
+    id
+    name
+  }
+  team {
+    id
+    key
+  }
+}
