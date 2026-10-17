@@ -50,6 +50,16 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - `Get-LinearProject` filters by `-Team` and `-Status`, and `-Id` (or piped projects) returns the
   full project with its content, members and initiatives. Projects include their health,
   priority, teams and labels.
+- `New-LinearLabel`, `Set-LinearLabel` and `Remove-LinearLabel`: create workspace or team labels
+  and label groups, rename and recolor labels, move them in and out of groups, retire and
+  restore them, and delete them. Labels are found by name (optionally `Group/Name`) among the
+  workspace labels, or a team's own labels with `-Team`.
+- `Get-LinearLabel -IncludeGroups -IncludeRetired` also returns label groups and retired labels,
+  and labels include their `GroupId`.
+- `New-LinearTeam`, `Set-LinearTeam` and `Remove-LinearTeam`: create teams and sub-teams, change
+  their name, key, description, time zone or parent, and delete them.
+- `Get-LinearTeamMember`, `Add-LinearTeamMember` and `Remove-LinearTeamMember`: list team members
+  with their ownership, and add or remove users.
 - `Get-LinearDocument`, `New-LinearDocument`, `Set-LinearDocument` and `Remove-LinearDocument`:
   list documents (all, or of an issue, project, initiative or team; filter by title), get one
   with its Markdown content, create documents in an issue, project, initiative or team, rename
