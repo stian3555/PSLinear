@@ -67,6 +67,25 @@ function Get-LinearResponseError {
     }
 }
 
+function Format-LinearValueList {
+    <#
+    .SYNOPSIS
+        Joins valid values for an error message, listing at most $script:MaxListedValues of them.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [AllowNull()]
+        [AllowEmptyCollection()]
+        [string[]] $Value
+    )
+
+    $values = @($Value | Where-Object { -not [string]::IsNullOrEmpty($_) })
+    if ($values.Count -eq 0) { return '(none)' }
+    if ($values.Count -le $script:MaxListedValues) { return $values -join ', ' }
+    '{0} (and {1} more)' -f ($values[0..($script:MaxListedValues - 1)] -join ', '), ($values.Count - $script:MaxListedValues)
+}
+
 function Format-LinearErrorMessage {
     <#
     .SYNOPSIS

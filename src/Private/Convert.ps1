@@ -105,6 +105,97 @@ function ConvertTo-LinearUser {
     }
 }
 
+function ConvertTo-LinearWorkflowState {
+    [CmdletBinding()]
+    [OutputType('PSLinear.WorkflowState')]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [AllowNull()]
+        [object] $InputObject
+    )
+
+    process {
+        if ($null -eq $InputObject) { return }
+        [pscustomobject]@{
+            PSTypeName = 'PSLinear.WorkflowState'
+            Id         = $InputObject.id
+            Name       = $InputObject.name
+            Type       = $InputObject.type
+            Position   = $InputObject.position
+            Color      = Get-LinearNestedValue -InputObject $InputObject -Name 'color'
+            Team       = Get-LinearNestedValue -InputObject $InputObject -Name 'team.key'
+            TeamId     = Get-LinearNestedValue -InputObject $InputObject -Name 'team.id'
+        }
+    }
+}
+
+function ConvertTo-LinearLabel {
+    <#
+    .SYNOPSIS
+        Flattens an IssueLabel node into a PSLinear.Label object. Team is $null for workspace labels.
+    #>
+    [CmdletBinding()]
+    [OutputType('PSLinear.Label')]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [AllowNull()]
+        [object] $InputObject
+    )
+
+    process {
+        if ($null -eq $InputObject) { return }
+        [pscustomobject]@{
+            PSTypeName  = 'PSLinear.Label'
+            Id          = $InputObject.id
+            Name        = $InputObject.name
+            Group       = Get-LinearNestedValue -InputObject $InputObject -Name 'parent.name'
+            Team        = Get-LinearNestedValue -InputObject $InputObject -Name 'team.key'
+            Color       = Get-LinearNestedValue -InputObject $InputObject -Name 'color'
+            Description = Get-LinearNestedValue -InputObject $InputObject -Name 'description'
+            IsGroup     = [bool](Get-LinearNestedValue -InputObject $InputObject -Name 'isGroup')
+            RetiredAt   = Get-LinearNestedValue -InputObject $InputObject -Name 'retiredAt'
+            TeamId      = Get-LinearNestedValue -InputObject $InputObject -Name 'team.id'
+        }
+    }
+}
+
+function ConvertTo-LinearProject {
+    [CmdletBinding()]
+    [OutputType('PSLinear.Project')]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [AllowNull()]
+        [object] $InputObject
+    )
+
+    process {
+        if ($null -eq $InputObject) { return }
+        [pscustomobject]@{
+            PSTypeName = 'PSLinear.Project'
+            Id         = $InputObject.id
+            Name       = $InputObject.name
+            Status     = Get-LinearNestedValue -InputObject $InputObject -Name 'status.name'
+            Url        = Get-LinearNestedValue -InputObject $InputObject -Name 'url'
+        }
+    }
+}
+
+function Test-LinearGuid {
+    <#
+    .SYNOPSIS
+        Returns $true when the value is a UUID, which Linear accepts as an id everywhere.
+    #>
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param(
+        [AllowNull()]
+        [string] $Value
+    )
+
+    $parsedGuid = [guid]::Empty
+    [guid]::TryParse($Value, [ref]$parsedGuid)
+}
+
 function Get-LinearNestedValue {
     <#
     .SYNOPSIS

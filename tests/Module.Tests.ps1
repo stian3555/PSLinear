@@ -5,6 +5,7 @@ BeforeDiscovery {
     $script:publicCommands = @(Get-Command -Module PSLinear -CommandType Function | ForEach-Object {
             @{ Name = $_.Name; Command = $_ }
         })
+    $script:graphQLOperations = @((Get-ChildItem -Path (Join-Path $PSScriptRoot '..' 'src' 'GraphQL') -Filter '*.graphql' -File).BaseName)
 }
 
 BeforeAll {
@@ -86,7 +87,7 @@ Describe 'GraphQL documents' {
         }
     }
 
-    It 'assembles <_> with all fragments it uses' -ForEach @('Viewer', 'GetIssue', 'ListIssues', 'ListTeams') {
+    It 'assembles <_> with all fragments it uses' -ForEach $script:graphQLOperations {
         InModuleScope PSLinear -Parameters @{ Name = $_ } {
             param($Name)
             $document = Get-LinearGraphQLDocument -Name $Name

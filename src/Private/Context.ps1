@@ -74,13 +74,19 @@ function Test-LinearConnection {
 function Clear-LinearCache {
     <#
     .SYNOPSIS
-        Clears cached lookups (teams). Called whenever the connection changes.
+        Clears cached lookups (teams, workflow states, labels, users, projects). Called whenever the connection changes.
     #>
     [CmdletBinding()]
     param()
 
     $script:LinearTeamCache = $null
     $script:LinearTeamCacheExpires = [datetime]::MinValue
+    $script:LinearUserCache = $null
+    $script:LinearUserCacheExpires = [datetime]::MinValue
+    $script:LinearProjectCache = $null
+    $script:LinearProjectCacheExpires = [datetime]::MinValue
+    $script:LinearWorkflowStateCache = @{}
+    $script:LinearLabelCache = @{}
 }
 
 function Get-LinearAuthorizationValue {
