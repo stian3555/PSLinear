@@ -87,4 +87,4 @@ $teamCompleter = {
         Write-Debug "Team completion failed: $($_.Exception.Message)"
     }
 }
-Register-ArgumentCompleter -CommandName 'Get-LinearIssue', 'New-LinearIssue' -ParameterName 'Team' -ScriptBlock $teamCompleter
+Register-ArgumentCompleter -CommandName 'Get-LinearIssue', 'New-LinearIssue', 'Set-LinearIssue' -ParameterName 'Team' -ScriptBlock $teamCompleter

@@ -34,6 +34,41 @@ function Format-LinearChangeList {
     $parts -join ', '
 }
 
+function Get-LinearIssueTarget {
+    <#
+    .SYNOPSIS
+        Normalises -Id strings and PSLinear.Issue objects for the issue write commands.
+    .DESCRIPTION
+        Returns one object per issue with Id (sent to Linear), Name (the identifier, for
+        messages) and TeamId ($null when it is not known without a request).
+    #>
+    [CmdletBinding()]
+    [OutputType([pscustomobject])]
+    param(
+        [AllowNull()]
+        [string[]] $Id,
+
+        [AllowNull()]
+        [object[]] $InputObject
+    )
+
+    foreach ($identifier in @($Id)) {
+        if ([string]::IsNullOrEmpty($identifier)) { continue }
+        [pscustomobject]@{ Id = $identifier; Name = $identifier; TeamId = $null }
+    }
+
+    foreach ($issue in @($InputObject)) {
+        if ($null -eq $issue) { continue }
+        $issueId = Get-LinearNestedValue -InputObject $issue -Name 'Id'
+        $identifier = Get-LinearNestedValue -InputObject $issue -Name 'Identifier'
+        [pscustomobject]@{
+            Id     = $issueId
+            Name   = if ($identifier) { $identifier } else { $issueId }
+            TeamId = Get-LinearNestedValue -InputObject $issue -Name 'TeamId'
+        }
+    }
+}
+
 function ConvertTo-LinearTimelessDate {
     <#
     .SYNOPSIS
