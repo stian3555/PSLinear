@@ -130,8 +130,11 @@ New-LinearIssue -Team ENG -Title 'Payment fails on retry' -Template 'Bug report'
 # Move the unstarted issues of the current cycle to the next one
 Get-LinearIssue -Team ENG -Cycle active -StateType Unstarted | Set-LinearIssue -Cycle next
 
-# Start work on an issue
-Set-LinearIssue ENG-412 -State 'In Progress' -Assignee me
+# Start work on an issue: assign it to you, move it to In Progress and check out its git branch
+Start-LinearIssue ENG-412
+
+# Later, in the same repository: which issue is this branch for?
+Get-LinearIssue -Current | Format-List Identifier, Title, State, Url
 
 # Create a project for two teams, then start it and post a status update
 New-LinearProject 'Checkout v2' -Team ENG, OPS -Lead me -TargetDate 2027-03-31 -Label Customer
@@ -236,7 +239,8 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { 
 | `New-LinearMilestone` | Create a project milestone. |
 | `Set-LinearMilestone` | Rename, reschedule, reorder or move milestones. |
 | `Remove-LinearMilestone` | Delete milestones; their issues stay in the project. |
-| `Get-LinearIssue` | Issues by identifier or URL, or filtered lists with paging. |
+| `Get-LinearIssue` | Issues by identifier or URL, the issue of the current git branch (`-Current`), or filtered lists with paging. |
+| `Start-LinearIssue` | Start an issue: assign it to you, move it to a started state and check out its git branch. |
 | `New-LinearIssue` | Create an issue, with states, labels, projects, milestones, cycles, users and templates given by name. |
 | `Set-LinearIssue` | Change issues: state, assignee, labels (replace, add or remove), priority and more, or clear values with `-Clear`. |
 | `Remove-LinearIssue` | Move issues to the trash, or archive them with `-Archive`. |
@@ -251,6 +255,7 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { 
 | `Get-LinearIssueRelation` | Relations of an issue, seen from it: Blocks, BlockedBy, Related, DuplicateOf, DuplicatedBy. |
 | `Add-LinearIssueRelation` | Relate issues: blocks, blocked by, related or duplicate. |
 | `Remove-LinearIssueRelation` | Remove relations, by id or between two issues. |
+| `Get-LinearAgentSession` | Agent sessions (AI agents working on issues), with status and summary; read-only. |
 | `Get-LinearRateLimit` | Rate-limit status from the latest response. |
 | `Invoke-LinearGraphQL` | Run any GraphQL query or mutation. |
 
@@ -319,7 +324,6 @@ publish. A mistake means a new version, not a re-tag.
 
 ## Roadmap
 
-- Git integration: start an issue on a new branch, and find the issue for the current branch
 - Tab completion for `-State`, `-Label` and `-Assignee`
 - Markdown help with platyPS and an online help URI
 

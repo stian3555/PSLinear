@@ -50,6 +50,14 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - `Get-LinearProject` filters by `-Team` and `-Status`, and `-Id` (or piped projects) returns the
   full project with its content, members and initiatives. Projects include their health,
   priority, teams and labels.
+- `Start-LinearIssue`: assigns an issue to you, moves it to the team's first started state if
+  it has not started yet (or to `-State`), and checks out its git branch, creating it from the
+  current commit or `-From` when needed. `-NoBranch` skips git, for example to start several
+  issues at once.
+- `Get-LinearIssue -Current` returns the issue whose identifier is in the name of the checked-out
+  git branch.
+- `Get-LinearAgentSession` lists agent sessions (newest first, filter by issue and status) and
+  gets them by id. It is read-only.
 - `New-LinearLabel`, `Set-LinearLabel` and `Remove-LinearLabel`: create workspace or team labels
   and label groups, rename and recolor labels, move them in and out of groups, retire and
   restore them, and delete them. Labels are found by name (optionally `Group/Name`) among the
