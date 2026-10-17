@@ -888,6 +888,56 @@
       </TableControl>
     </View>
     <View>
+      <Name>PSLinear.AgentSession</Name>
+      <ViewSelectedBy>
+        <TypeName>PSLinear.AgentSession</TypeName>
+      </ViewSelectedBy>
+      <TableControl>
+        <TableHeaders>
+          <TableColumnHeader>
+            <Label>CreatedAt</Label>
+            <Width>16</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Agent</Label>
+            <Width>18</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Status</Label>
+            <Width>13</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Issue</Label>
+            <Width>10</Width>
+          </TableColumnHeader>
+          <TableColumnHeader>
+            <Label>Summary</Label>
+          </TableColumnHeader>
+        </TableHeaders>
+        <TableRowEntries>
+          <TableRowEntry>
+            <TableColumnItems>
+              <TableColumnItem>
+                <ScriptBlock>if ($_.CreatedAt) { ([datetime]$_.CreatedAt).ToLocalTime().ToString('yyyy-MM-dd HH:mm') }</ScriptBlock>
+              </TableColumnItem>
+              <TableColumnItem>
+                <PropertyName>Agent</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <PropertyName>Status</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <PropertyName>Issue</PropertyName>
+              </TableColumnItem>
+              <TableColumnItem>
+                <PropertyName>Summary</PropertyName>
+              </TableColumnItem>
+            </TableColumnItems>
+          </TableRowEntry>
+        </TableRowEntries>
+      </TableControl>
+    </View>
+    <View>
       <Name>PSLinear.Context</Name>
       <ViewSelectedBy>
         <TypeName>PSLinear.Context</TypeName>

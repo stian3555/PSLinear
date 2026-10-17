@@ -1,0 +1,11 @@
+query ListAgentSessions($first: Int, $after: String, $includeArchived: Boolean) {
+  agentSessions(first: $first, after: $after, includeArchived: $includeArchived, orderBy: createdAt) {
+    nodes {
+      ...AgentSessionFields
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

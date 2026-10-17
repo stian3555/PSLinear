@@ -16,6 +16,7 @@
         'Add-LinearTeamMember'
         'Connect-Linear'
         'Disconnect-Linear'
+        'Get-LinearAgentSession'
         'Get-LinearAttachment'
         'Get-LinearComment'
         'Get-LinearCycle'
@@ -69,6 +70,7 @@
         'Set-LinearProject'
         'Set-LinearProjectUpdate'
         'Set-LinearTeam'
+        'Start-LinearIssue'
     )
     CmdletsToExport      = @()
     VariablesToExport    = @()

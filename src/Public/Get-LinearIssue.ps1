@@ -4,7 +4,9 @@ function Get-LinearIssue {
         Gets Linear issues by identifier, or lists issues that match a filter.
 
     .DESCRIPTION
-        With -Id, returns specific issues by their identifier (ENG-123), UUID or URL.
+        With -Id, returns specific issues by their identifier (ENG-123), UUID or URL. With
+        -Current, returns the issue whose identifier is in the name of the git branch checked out
+        in the current location, such as ada/eng-123-fix-login.
 
         Without -Id, lists issues that match the filter parameters. Parameters are combined
         with AND; values within one parameter (for example several states) are combined
@@ -20,6 +22,10 @@ function Get-LinearIssue {
 
     .PARAMETER InputObject
         PSLinear.Issue objects to refresh, typically from the pipeline.
+
+    .PARAMETER Current
+        Returns the issue of the current git branch. The branch name must contain an identifier
+        with the key of one of your teams.
 
     .PARAMETER Team
         The team key (ENG), name or id. Accepts PSLinear.Team objects from the pipeline.
@@ -85,6 +91,11 @@ function Get-LinearIssue {
         Gets one issue.
 
     .EXAMPLE
+        Get-LinearIssue -Current | Format-List Identifier, Title, State, Url
+
+        Shows the issue you are working on, from the name of the checked-out git branch.
+
+    .EXAMPLE
         Get-LinearIssue -Assignee me -StateType Unstarted, Started
 
         Lists your open issues.
@@ -139,6 +150,9 @@ function Get-LinearIssue {
         [Parameter(Mandatory, ValueFromPipeline, ParameterSetName = 'ByObject')]
         [PSTypeName('PSLinear.Issue')]
         [object[]] $InputObject,
+
+        [Parameter(Mandatory, ParameterSetName = 'Current')]
+        [switch] $Current,
 
         [Parameter(ParameterSetName = 'List', ValueFromPipelineByPropertyName)]
         [Alias('Key')]
@@ -212,12 +226,25 @@ function Get-LinearIssue {
     )
 
     process {
-        if ($PSCmdlet.ParameterSetName -in 'ById', 'ByObject') {
-            $identifiers = if ($PSCmdlet.ParameterSetName -eq 'ById') {
-                foreach ($value in $Id) { ConvertTo-LinearIssueIdentifier -Value $value }
-            }
-            else {
-                $InputObject | ForEach-Object Id
+        if ($Current -or $PSCmdlet.ParameterSetName -in 'ById', 'ByObject') {
+            $identifiers = switch ($PSCmdlet.ParameterSetName) {
+                'ById' { foreach ($value in $Id) { ConvertTo-LinearIssueIdentifier -Value $value } }
+                'ByObject' { $InputObject | ForEach-Object Id }
+                'Current' {
+                    try {
+                        $branch = Get-LinearGitBranch
+                        $identifier = Find-LinearIssueIdentifier -Branch $branch
+                        if (-not $identifier) {
+                            $keys = Format-LinearValueList -Value (Get-LinearTeamCache | Where-Object { $null -ne $_ } | ForEach-Object Key)
+                            throw (New-LinearErrorRecord -Message "The branch '$branch' does not contain an issue identifier with a team key ($keys)." `
+                                    -ErrorId 'PSLinear.NoIssueInBranch' -Category ObjectNotFound -TargetObject $branch)
+                        }
+                    }
+                    catch {
+                        $PSCmdlet.ThrowTerminatingError($_)
+                    }
+                    $identifier
+                }
             }
             $query = Get-LinearGraphQLDocument -Name 'GetIssue'
 
