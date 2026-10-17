@@ -163,7 +163,41 @@ function ConvertTo-LinearLabel {
             IsGroup         = [bool](Get-LinearNestedValue -InputObject $InputObject -Name 'isGroup')
             RetiredAt       = Get-LinearNestedValue -InputObject $InputObject -Name 'retiredAt'
             TeamId          = Get-LinearNestedValue -InputObject $InputObject -Name 'team.id'
+            GroupId         = Get-LinearNestedValue -InputObject $InputObject -Name 'parent.id'
             InheritedFromId = Get-LinearNestedValue -InputObject $InputObject -Name 'inheritedFrom.id'
+        }
+    }
+}
+
+function ConvertTo-LinearTeamMember {
+    <#
+    .SYNOPSIS
+        Flattens a TeamMembership node into a PSLinear.TeamMember object. Owner says whether the
+        user owns the team; MembershipId is what Remove-LinearTeamMember deletes.
+    #>
+    [CmdletBinding()]
+    [OutputType('PSLinear.TeamMember')]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [AllowNull()]
+        [object] $InputObject
+    )
+
+    process {
+        if ($null -eq $InputObject) { return }
+        [pscustomobject]@{
+            PSTypeName   = 'PSLinear.TeamMember'
+            Team         = Get-LinearNestedValue -InputObject $InputObject -Name 'team.key'
+            Name         = Get-LinearNestedValue -InputObject $InputObject -Name 'user.name'
+            DisplayName  = Get-LinearNestedValue -InputObject $InputObject -Name 'user.displayName'
+            Email        = Get-LinearNestedValue -InputObject $InputObject -Name 'user.email'
+            Owner        = [bool](Get-LinearNestedValue -InputObject $InputObject -Name 'owner')
+            Admin        = [bool](Get-LinearNestedValue -InputObject $InputObject -Name 'user.admin')
+            Active       = [bool](Get-LinearNestedValue -InputObject $InputObject -Name 'user.active')
+            MemberSince  = Get-LinearNestedValue -InputObject $InputObject -Name 'createdAt'
+            UserId       = Get-LinearNestedValue -InputObject $InputObject -Name 'user.id'
+            TeamId       = Get-LinearNestedValue -InputObject $InputObject -Name 'team.id'
+            MembershipId = $InputObject.id
         }
     }
 }

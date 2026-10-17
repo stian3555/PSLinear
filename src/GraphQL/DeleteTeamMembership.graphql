@@ -1,0 +1,5 @@
+mutation DeleteTeamMembership($id: String!) {
+  teamMembershipDelete(id: $id) {
+    success
+  }
+}

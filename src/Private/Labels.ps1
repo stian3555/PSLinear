@@ -31,12 +31,16 @@ function Get-LinearLabelList {
         With -TeamId, returns workspace labels and the labels of that team and its parent teams;
         a team's inherited copy of a workspace or parent-team label replaces the original, so
         each name appears once. Without -TeamId, returns every label in the workspace. Label
-        groups and retired labels are left out.
+        groups and retired labels are left out unless -IncludeGroups or -IncludeRetired is given.
     #>
     [CmdletBinding()]
     [OutputType('PSLinear.Label')]
     param(
-        [string] $TeamId
+        [string] $TeamId,
+
+        [switch] $IncludeGroups,
+
+        [switch] $IncludeRetired
     )
 
     $variables = @{}
@@ -50,7 +54,7 @@ function Get-LinearLabelList {
     }
     $labels = @(Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListIssueLabels') -ConnectionPath 'issueLabels' -Limit 0 -Variables $variables |
             ConvertTo-LinearLabel |
-            Where-Object { $null -ne $_ -and -not $_.IsGroup -and $null -eq $_.RetiredAt })
+            Where-Object { $null -ne $_ -and ($IncludeGroups -or -not $_.IsGroup) -and ($IncludeRetired -or $null -eq $_.RetiredAt) })
     if ($TeamId) {
         $replaced = @($labels | ForEach-Object InheritedFromId | Where-Object { $_ })
         $labels = @($labels | Where-Object { $_.Id -notin $replaced })
@@ -164,3 +168,85 @@ function Resolve-LinearListedLabelId {
                 -ErrorId 'PSLinear.LabelNotFound' -Category ObjectNotFound -TargetObject $name)
     }
 }
+
+function Get-LinearScopedLabel {
+    <#
+    .SYNOPSIS
+        Fetches the labels that belong to one scope: a team's own labels with -TeamId, or the
+        workspace labels without it. Groups and retired labels are included.
+    .DESCRIPTION
+        Used by the label management commands, which change a label itself rather than apply
+        it, so labels inherited from the workspace or parent teams are not part of a team's
+        scope. The result is not cached.
+    #>
+    [CmdletBinding()]
+    [OutputType('PSLinear.Label')]
+    param(
+        [string] $TeamId
+    )
+
+    $filter = if ($TeamId) { @{ team = @{ id = @{ eq = $TeamId } } } } else { @{ team = @{ null = $true } } }
+    Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListIssueLabels') -ConnectionPath 'issueLabels' -Limit 0 -Variables @{ filter = $filter } |
+        ConvertTo-LinearLabel |
+        Sort-Object -Property Name, Id
+}
+
+function Resolve-LinearScopedLabelId {
+    <#
+    .SYNOPSIS
+        Resolves a label name or id within one scope (a team's own labels, or the workspace
+        labels) to the label's id. A name can include its group: Area/Frontend.
+    .PARAMETER GroupOnly
+        Only label groups match, for the parent of a new or moved label. Workspace groups are
+        then valid for team labels too.
+    .NOTES
+        Throws an ErrorRecord (PSLinear.LabelNotFound or PSLinear.AmbiguousLabel) that callers
+        rethrow with $PSCmdlet.ThrowTerminatingError.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)]
+        [string] $Label,
+
+        [string] $TeamId,
+
+        [switch] $GroupOnly
+    )
+
+    if (Test-LinearGuid -Value $Label) { return $Label }
+
+    $candidates = @(Get-LinearScopedLabel -TeamId $TeamId)
+    if ($GroupOnly -and $TeamId) { $candidates += @(Get-LinearScopedLabel) }
+    $candidates = @($candidates | Where-Object { $null -ne $_ -and (-not $GroupOnly -or $_.IsGroup) })
+
+    $group, $name = if ($Label.Contains('/')) { $Label.Split('/', 2) } else { $null, $Label }
+    $match = @($candidates | Where-Object { $_.Name -eq $name -and ($null -eq $group -or $_.Group -eq $group) })
+    # A name with a slash in it may be the whole label name rather than Group/Name.
+    if ($match.Count -eq 0 -and $null -ne $group) { $match = @($candidates | Where-Object Name -EQ $Label) }
+
+    $scope = if ($TeamId) { "team $(Get-LinearTeamKey -TeamId $TeamId)" } else { 'the workspace' }
+    $noun = if ($GroupOnly) { 'Label group' } else { 'Label' }
+    if ($match.Count -eq 1) { return $match[0].Id }
+    if ($match.Count -gt 1) {
+        $matchList = ($match | ForEach-Object { "$(if ($_.Group) { "$($_.Group)/" })$($_.Name) (id $($_.Id))" }) -join '; '
+        throw (New-LinearErrorRecord -Message "$noun '$Label' is ambiguous in $scope. Use Group/Name or the label id instead. Matches: $matchList." `
+                -ErrorId 'PSLinear.AmbiguousLabel' -Category InvalidArgument -TargetObject $Label)
+    }
+    $available = Format-LinearValueList -Value ($candidates | ForEach-Object { "$(if ($_.Group) { "$($_.Group)/" })$($_.Name)" } | Select-Object -Unique)
+    throw (New-LinearErrorRecord -Message "$noun '$Label' was not found in $scope. Valid $($noun.ToLowerInvariant())s: $available." `
+            -ErrorId 'PSLinear.LabelNotFound' -Category ObjectNotFound -TargetObject $Label)
+}
+
+function Reset-LinearLabelCache {
+    <#
+    .SYNOPSIS
+        Forgets the cached labels of every team, so name lookups see labels that were just created, changed or deleted.
+    #>
+    [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Clears an in-memory cache only.')]
+    [CmdletBinding()]
+    param()
+
+    $script:LinearLabelCache = @{}
+}
+

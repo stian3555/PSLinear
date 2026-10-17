@@ -146,6 +146,12 @@ New-LinearInitiative 'Q1 growth' -Owner me -Status Active -TargetDate 2027-03-31
     Set-LinearInitiative -AddProject 'Checkout v2', Website
 New-LinearInitiativeUpdate -Initiative 'Q1 growth' 'Checkout v2 is on track; Website slipped a week.' -Health AtRisk
 
+# Set up a sub-team with its own label group and members
+New-LinearTeam 'Mobile' -Key MOB -Parent ENG
+New-LinearLabel Platform -Team MOB -IsGroup
+New-LinearLabel iOS -Team MOB -Group Platform -Color '#5E6AD2'
+Add-LinearTeamMember MOB -User me, 'grace@example.com'
+
 # Write a project document from a Markdown file, then read it back
 New-LinearDocument 'Launch plan' -Project 'Checkout v2' -Content (Get-Content ./launch-plan.md -Raw)
 Get-LinearDocument -Project 'Checkout v2' -Title 'Launch plan' | Get-LinearDocument | Select-Object -ExpandProperty Content
@@ -192,9 +198,18 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { 
 | `Disconnect-Linear` | Forget the credential and cached data. |
 | `Get-LinearViewer` | The authenticated user and organization. |
 | `Get-LinearTeam` | Teams, filterable by key or name with wildcards. |
+| `New-LinearTeam` | Create a team or sub-team. |
+| `Set-LinearTeam` | Rename a team, change its key, description, time zone or parent. |
+| `Remove-LinearTeam` | Delete teams (archived until Linear deletes them with their issues). |
+| `Get-LinearTeamMember` | Members of teams, with team ownership. |
+| `Add-LinearTeamMember` | Add users to a team. |
+| `Remove-LinearTeamMember` | Remove users from a team. |
 | `Get-LinearUser` | Users, filterable by name or email; `-IncludeDisabled` for deactivated users. |
 | `Get-LinearWorkflowState` | Workflow states per team, in workflow order, filterable by name or type. |
-| `Get-LinearLabel` | Labels in the workspace, or the labels a team can use. |
+| `Get-LinearLabel` | Labels in the workspace, or the labels a team can use; `-IncludeGroups` and `-IncludeRetired` for the rest. |
+| `New-LinearLabel` | Create a workspace or team label, or a label group. |
+| `Set-LinearLabel` | Rename, recolor, regroup, retire or restore labels. |
+| `Remove-LinearLabel` | Delete labels (Linear removes them from their issues). |
 | `Get-LinearProject` | Projects with status, health, lead, teams, labels, dates and progress, filterable by team and status; `-Id` for the full project with content and members. |
 | `New-LinearProject` | Create a project, with teams, lead, members, status, labels and template given by name. |
 | `Set-LinearProject` | Change projects: status, lead, dates, priority, teams, labels and members (replace, add or remove), or clear values. |
@@ -304,7 +319,6 @@ publish. A mistake means a new version, not a re-tag.
 
 ## Roadmap
 
-- Creating and removing labels and teams
 - Git integration: start an issue on a new branch, and find the issue for the current branch
 - Tab completion for `-State`, `-Label` and `-Assignee`
 - Markdown help with platyPS and an online help URI

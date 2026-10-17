@@ -126,3 +126,47 @@ function Test-LinearTeamUsesEstimate {
     }
     $true
 }
+
+function Reset-LinearTeamCache {
+    <#
+    .SYNOPSIS
+        Forgets the cached teams, so name lookups and tab completion see teams that were just
+        created, renamed or removed. With -TeamId, also forgets that team's workflow states,
+        labels and cycles.
+    #>
+    [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Clears an in-memory cache only.')]
+    [CmdletBinding()]
+    param(
+        [string] $TeamId
+    )
+
+    $script:LinearTeamCache = $null
+    $script:LinearTeamCacheExpires = [datetime]::MinValue
+    if ($TeamId) {
+        $script:LinearWorkflowStateCache.Remove($TeamId)
+        $script:LinearLabelCache.Remove($TeamId)
+        $script:LinearCycleCache.Remove($TeamId)
+    }
+}
+
+function Get-LinearTeamMemberList {
+    <#
+    .SYNOPSIS
+        Fetches a team's memberships. Returns [pscustomobject]@{ Members; Errors }, so a missing
+        team can be written as one non-terminating error.
+    #>
+    [CmdletBinding()]
+    [OutputType([pscustomobject])]
+    param(
+        [Parameter(Mandatory)]
+        [string] $TeamId
+    )
+
+    $result = Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListTeamMemberships') -ConnectionPath 'team.memberships' `
+        -Variables @{ id = $TeamId } -Limit 0 -IncludeErrors
+    [pscustomobject]@{
+        Members = @($result.Nodes | ConvertTo-LinearTeamMember | Sort-Object -Property Name)
+        Errors  = $result.Errors
+    }
+}
+

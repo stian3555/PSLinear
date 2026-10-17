@@ -1,0 +1,19 @@
+fragment IssueLabelFields on IssueLabel {
+  id
+  name
+  color
+  description
+  isGroup
+  retiredAt
+  parent {
+    id
+    name
+  }
+  inheritedFrom {
+    id
+  }
+  team {
+    id
+    key
+  }
+}

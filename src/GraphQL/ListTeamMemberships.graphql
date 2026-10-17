@@ -1,0 +1,27 @@
+query ListTeamMemberships($id: String!, $first: Int, $after: String) {
+  team(id: $id) {
+    memberships(first: $first, after: $after) {
+      nodes {
+        id
+        owner
+        createdAt
+        user {
+          id
+          name
+          displayName
+          email
+          admin
+          active
+        }
+        team {
+          id
+          key
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

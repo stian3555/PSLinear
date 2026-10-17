@@ -1,0 +1,8 @@
+mutation UpdateTeam($id: String!, $input: TeamUpdateInput!) {
+  teamUpdate(id: $id, input: $input) {
+    success
+    team {
+      ...TeamFields
+    }
+  }
+}
