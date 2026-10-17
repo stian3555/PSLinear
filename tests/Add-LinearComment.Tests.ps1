@@ -13,8 +13,11 @@ Describe 'Add-LinearComment' {
             $request = Get-RequestBody -Body $Body
             $response = Get-LinearTestCommentResponse -Request $request
             if ($null -ne $response) { return $response }
+            $response = Get-LinearTestAttachmentResponse -Request $request
+            if ($null -ne $response) { return $response }
             Get-LinearTestLookupResponse -Request $request
         }
+        Mock -ModuleName PSLinear Send-LinearFileUpload { 200 }
     }
 
     Context 'Request' {
@@ -100,6 +103,56 @@ Describe 'Add-LinearComment' {
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly -ParameterFilter {
                 (Get-RequestOperation $Body) -eq 'CreateComment'
             }
+        }
+    }
+
+    Context 'Attachments' {
+        BeforeEach {
+            Set-Content -LiteralPath (Join-Path $TestDrive 'after.png') -Value 'png' -NoNewline
+            Set-Content -LiteralPath (Join-Path $TestDrive 'trace.txt') -Value 'trace' -NoNewline
+        }
+
+        It 'uploads the files and adds them after the text, images shown and other files linked' {
+            $comment = Add-LinearComment ENG-1 'After the fix:' -Attachment (Join-Path $TestDrive 'after.png'), (Join-Path $TestDrive 'trace.txt')
+            $comment.Body | Should -Be "After the fix:`n`n![after.png](https://uploads.linear.app/asset/after.png)`n`n[trace.txt](https://uploads.linear.app/asset/trace.txt)"
+            Should -Invoke Send-LinearFileUpload -ModuleName PSLinear -Times 2 -Exactly
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 2 -Exactly -ParameterFilter {
+                (Get-RequestOperation $Body) -eq 'RequestFileUpload' -and (Get-RequestVariable $Body 'makePublic') -eq $false
+            }
+        }
+
+        It 'comments with only attachments' {
+            (Add-LinearComment -Issue ENG-1 -Attachment (Join-Path $TestDrive 'after.png')).Body |
+                Should -Be '![after.png](https://uploads.linear.app/asset/after.png)'
+        }
+
+        It 'uploads images to a public URL with -Public, with a warning' {
+            Add-LinearComment -Issue ENG-1 -Attachment (Join-Path $TestDrive 'after.png') -Public -WarningVariable uploadWarnings -WarningAction SilentlyContinue | Out-Null
+            $uploadWarnings.Count | Should -Be 1
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
+                (Get-RequestOperation $Body) -eq 'RequestFileUpload' -and (Get-RequestVariable $Body 'makePublic') -eq $true
+            }
+        }
+
+        It 'refuses to make non-images public, before sending anything' {
+            { Add-LinearComment -Issue ENG-1 -Attachment (Join-Path $TestDrive 'trace.txt') -Public } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*'
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
+        }
+
+        It 'needs a body or an attachment, and -Public needs an attachment' {
+            { Add-LinearComment -Issue ENG-1 } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*'
+            { Add-LinearComment -Issue ENG-1 -Body 'x' -Public } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*'
+        }
+
+        It 'stops on a missing file before sending anything' {
+            { Add-LinearComment -Issue ENG-1 -Body 'x' -Attachment (Join-Path $TestDrive 'nope.png') } | Should -Throw -ErrorId 'PSLinear.FileNotFound*'
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
+        }
+
+        It 'uploads nothing with -WhatIf' {
+            Add-LinearComment -Issue ENG-1 -Body 'x' -Attachment (Join-Path $TestDrive 'after.png') -WhatIf
+            Should -Invoke Send-LinearFileUpload -ModuleName PSLinear -Times 0 -Exactly
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
         }
     }
 

@@ -1,0 +1,8 @@
+mutation LinkAttachmentUrl($issueId: String!, $url: String!, $title: String) {
+  attachmentLinkURL(issueId: $issueId, url: $url, title: $title) {
+    success
+    attachment {
+      ...AttachmentFields
+    }
+  }
+}

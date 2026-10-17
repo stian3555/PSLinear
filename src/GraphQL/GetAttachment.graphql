@@ -1,0 +1,5 @@
+query GetAttachment($id: String!) {
+  attachment(id: $id) {
+    ...AttachmentFields
+  }
+}

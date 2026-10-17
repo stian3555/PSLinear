@@ -1,0 +1,13 @@
+query ListIssueAttachments($id: String!, $first: Int, $after: String) {
+  issue(id: $id) {
+    attachments(first: $first, after: $after) {
+      nodes {
+        ...AttachmentFields
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

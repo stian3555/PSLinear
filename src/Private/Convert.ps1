@@ -246,6 +246,44 @@ function ConvertTo-LinearComment {
     }
 }
 
+function ConvertTo-LinearAttachment {
+    <#
+    .SYNOPSIS
+        Flattens an Attachment node (AttachmentFields fragment) into a PSLinear.Attachment object.
+    .NOTES
+        Source is the integration that created a link (github, slack, ...), or null for uploads
+        and plain links.
+    #>
+    [CmdletBinding()]
+    [OutputType('PSLinear.Attachment')]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [AllowNull()]
+        [object] $InputObject
+    )
+
+    process {
+        if ($null -eq $InputObject) { return }
+        # Linear reports uploads and plain links as source 'unknown'.
+        $source = Get-LinearNestedValue -InputObject $InputObject -Name 'sourceType'
+        if ($source -eq 'unknown') { $source = $null }
+        [pscustomobject]@{
+            PSTypeName = 'PSLinear.Attachment'
+            Id         = $InputObject.id
+            Issue      = Get-LinearNestedValue -InputObject $InputObject -Name 'issue.identifier'
+            Title      = Get-LinearNestedValue -InputObject $InputObject -Name 'title'
+            Subtitle   = Get-LinearNestedValue -InputObject $InputObject -Name 'subtitle'
+            Url        = Get-LinearNestedValue -InputObject $InputObject -Name 'url'
+            Source     = $source
+            Creator    = Get-LinearNestedValue -InputObject $InputObject -Name 'creator.name'
+            CreatedAt  = Get-LinearNestedValue -InputObject $InputObject -Name 'createdAt'
+            UpdatedAt  = Get-LinearNestedValue -InputObject $InputObject -Name 'updatedAt'
+            IssueId    = Get-LinearNestedValue -InputObject $InputObject -Name 'issue.id'
+            CreatorId  = Get-LinearNestedValue -InputObject $InputObject -Name 'creator.id'
+        }
+    }
+}
+
 function ConvertTo-LinearCycle {
     <#
     .SYNOPSIS

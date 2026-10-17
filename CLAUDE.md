@@ -30,7 +30,8 @@ PowerShell 7.4+ only (`CompatiblePSEditions = Core`), cross-platform.
 **HTTP goes through one place.**
 - Use `Invoke-LinearRequest` for single requests and `Invoke-LinearPagedRequest` for Relay connections.
 - They handle auth, GraphQL errors that arrive with HTTP 200, `RATELIMITED` (HTTP 400), 5xx retries and backoff.
-- Do not call `Invoke-RestMethod` anywhere else.
+- File uploads use `Invoke-LinearFileUpload` (`Private/Uploads.ps1`): the `fileUpload` mutation, then a PUT of the file to the signed storage URL through `Send-LinearFileUpload`, with retries. That PUT is the only request that does not go to the GraphQL endpoint.
+- Do not call `Invoke-RestMethod` or `Invoke-WebRequest` anywhere except `Send-LinearHttpRequest` and `Send-LinearFileUpload`.
 
 **Errors.**
 - Build errors with `New-LinearErrorRecord -ErrorId 'PSLinear.<Name>'` and throw them via `$PSCmdlet.ThrowTerminatingError(...)`.
