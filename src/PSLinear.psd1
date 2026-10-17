@@ -2,9 +2,9 @@
     RootModule           = 'PSLinear.psm1'
     ModuleVersion        = '0.1.0'
     GUID                 = '40af22af-f469-4d7e-a6fa-4419ae93dbda'
-    Author               = 'Stian'
+    Author               = 'Stian Johansen'
     CompanyName          = 'Community'
-    Copyright            = '(c) 2026 Stian. Released under the MIT License.'
+    Copyright            = '(c) 2026 Stian Johansen. Released under the MIT License.'
     Description          = 'Unofficial PowerShell module for the Linear (linear.app) GraphQL API. Pipeline-friendly cmdlets for issues and teams, with automatic paging, rate-limit handling and an escape hatch for raw GraphQL.'
     PowerShellVersion    = '7.4'
     CompatiblePSEditions = @('Core')
