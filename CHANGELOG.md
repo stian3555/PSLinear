@@ -6,6 +6,11 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- `build.ps1` runs Analyze before Build by default, and retries the intermittent
+  PSScriptAnalyzer crash up to five times.
+
 ### Added
 
 - `Get-LinearComment`, `Add-LinearComment`, `Set-LinearComment` and `Remove-LinearComment`:
@@ -23,6 +28,13 @@ and this project follows [Semantic Versioning](https://semver.org/).
   issue's relations in both directions, seen from the issue (Blocks, BlockedBy, Related,
   DuplicateOf, DuplicatedBy, Similar), relate issues, and remove relations by id, by object or
   between two issues.
+- `New-LinearIssue` and `Set-LinearIssue` take `-Cycle` (active, next, previous, +1/-1, a number,
+  a name or an id), `-Milestone` (by name within the project) and `-Delegate` (an agent);
+  `New-LinearIssue` also takes `-Template`. `Set-LinearIssue -Clear` can clear the milestone and
+  delegate.
+- `Get-LinearIssue` filters by `-Cycle`, `-Milestone` and `-Delegate`, and issues include their
+  milestone and delegate.
+- `Get-LinearTemplate` lists issue, project and document templates.
 - `-Project` parameters also accept a project's slug id and URL.
 
 ## [0.1.0] - 2026-10-17

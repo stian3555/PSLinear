@@ -15,6 +15,11 @@ $script:LinearProjectCacheExpires = [datetime]::MinValue
 # Per-team caches, keyed by team id: @{ Items = <objects>; Expires = <UTC datetime> }.
 $script:LinearWorkflowStateCache = @{}
 $script:LinearLabelCache = @{}
+$script:LinearCycleCache = @{}
+# Keyed by project id.
+$script:LinearMilestoneCache = @{}
+$script:LinearTemplateCache = $null
+$script:LinearTemplateCacheExpires = [datetime]::MinValue
 $script:LinearDocumentCache = @{}
 
 $script:ModuleVersion = $ExecutionContext.SessionState.Module.Version
@@ -88,5 +93,5 @@ $teamCompleter = {
         Write-Debug "Team completion failed: $($_.Exception.Message)"
     }
 }
-$teamCommands = 'Get-LinearCycle', 'Get-LinearIssue', 'Get-LinearLabel', 'Get-LinearWorkflowState', 'New-LinearIssue', 'Set-LinearIssue'
+$teamCommands = 'Get-LinearCycle', 'Get-LinearIssue', 'Get-LinearLabel', 'Get-LinearTemplate', 'Get-LinearWorkflowState', 'New-LinearIssue', 'Set-LinearIssue'
 Register-ArgumentCompleter -CommandName $teamCommands -ParameterName 'Team' -ScriptBlock $teamCompleter

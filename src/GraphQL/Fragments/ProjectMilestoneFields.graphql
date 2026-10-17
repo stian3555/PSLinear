@@ -1,0 +1,13 @@
+fragment ProjectMilestoneFields on ProjectMilestone {
+  id
+  name
+  description
+  targetDate
+  status
+  progress
+  sortOrder
+  project {
+    id
+    name
+  }
+}

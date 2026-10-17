@@ -1,0 +1,11 @@
+query ListProjectMilestones($filter: ProjectMilestoneFilter, $first: Int, $after: String) {
+  projectMilestones(filter: $filter, first: $first, after: $after) {
+    nodes {
+      ...ProjectMilestoneFields
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

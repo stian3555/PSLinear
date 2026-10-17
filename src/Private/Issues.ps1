@@ -41,7 +41,7 @@ function Get-LinearIssueTarget {
         Normalises -Id strings and PSLinear.Issue objects for the issue write commands.
     .DESCRIPTION
         Returns one object per issue with Id (sent to Linear), Name (the identifier, for
-        messages) and TeamId ($null when it is not known without a request).
+        messages), and TeamId and ProjectId ($null when they are not known without a request).
     #>
     [CmdletBinding()]
     [OutputType([pscustomobject])]
@@ -56,7 +56,7 @@ function Get-LinearIssueTarget {
     foreach ($value in @($Id)) {
         if ([string]::IsNullOrEmpty($value)) { continue }
         $identifier = ConvertTo-LinearIssueIdentifier -Value $value
-        [pscustomobject]@{ Id = $identifier; Name = $identifier; TeamId = $null }
+        [pscustomobject]@{ Id = $identifier; Name = $identifier; TeamId = $null; ProjectId = $null }
     }
 
     foreach ($issue in @($InputObject)) {
@@ -64,11 +64,32 @@ function Get-LinearIssueTarget {
         $issueId = Get-LinearNestedValue -InputObject $issue -Name 'Id'
         $identifier = Get-LinearNestedValue -InputObject $issue -Name 'Identifier'
         [pscustomobject]@{
-            Id     = $issueId
-            Name   = if ($identifier) { $identifier } else { $issueId }
-            TeamId = Get-LinearNestedValue -InputObject $issue -Name 'TeamId'
+            Id        = $issueId
+            Name      = if ($identifier) { $identifier } else { $issueId }
+            TeamId    = Get-LinearNestedValue -InputObject $issue -Name 'TeamId'
+            ProjectId = Get-LinearNestedValue -InputObject $issue -Name 'ProjectId'
         }
     }
+}
+
+function ConvertTo-LinearUserFilter {
+    <#
+    .SYNOPSIS
+        Builds a UserFilter for 'me', an email address, a user id, or a full or display name.
+    .NOTES
+        Used for the assignee and delegate filters of Get-LinearIssue. Sends no request.
+    #>
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param(
+        [Parameter(Mandatory)]
+        [string] $User
+    )
+
+    if ($User -eq 'me') { return @{ isMe = @{ eq = $true } } }
+    if ($User -match '@') { return @{ email = @{ eqIgnoreCase = $User } } }
+    if (Test-LinearGuid -Value $User) { return @{ id = @{ eq = $User } } }
+    @{ or = @(@{ name = @{ eqIgnoreCase = $User } }, @{ displayName = @{ eqIgnoreCase = $User } }) }
 }
 
 function Get-LinearIssueReference {

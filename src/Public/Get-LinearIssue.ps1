@@ -37,11 +37,18 @@ function Get-LinearIssue {
     .PARAMETER Unassigned
         Only issues without an assignee.
 
+    .PARAMETER Delegate
+        Issues delegated to this agent: an email address, a user id, or the agent's name or
+        display name.
+
     .PARAMETER Label
         Label names. Matches issues that have any of the labels.
 
     .PARAMETER Project
         Project name or id.
+
+    .PARAMETER Milestone
+        Project milestone name or id.
 
     .PARAMETER Priority
         Priority levels: None, Urgent, High, Medium or Low, or the numbers 0 to 4.
@@ -50,7 +57,11 @@ function Get-LinearIssue {
         Text to search for in the title, description and comments.
 
     .PARAMETER CurrentCycle
-        Only issues in an active cycle.
+        Only issues in an active cycle. The same as -Cycle active.
+
+    .PARAMETER Cycle
+        Only issues in this cycle: active (or current), next, previous, a cycle number, a cycle
+        name or an id. Numbers and names apply to every team unless -Team is given.
 
     .PARAMETER Filter
         A raw Linear IssueFilter as a hashtable, combined with the other filter parameters
@@ -92,6 +103,11 @@ function Get-LinearIssue {
         Get-LinearTeam -Name ENG, OPS | Get-LinearIssue -CurrentCycle
 
         Issues in the current cycle for two teams.
+
+    .EXAMPLE
+        Get-LinearIssue -Team ENG -Cycle next -Milestone 'Beta'
+
+        Issues planned for the team's next cycle in the Beta milestone.
 
     .EXAMPLE
         Get-LinearIssue -Filter @{ dueDate = @{ lt = (Get-Date).ToString('yyyy-MM-dd') } } -StateType Unstarted, Started
@@ -146,6 +162,10 @@ function Get-LinearIssue {
 
         [Parameter(ParameterSetName = 'List')]
         [ValidateNotNullOrEmpty()]
+        [string] $Delegate,
+
+        [Parameter(ParameterSetName = 'List')]
+        [ValidateNotNullOrEmpty()]
         [string[]] $Label,
 
         [Parameter(ParameterSetName = 'List')]
@@ -163,6 +183,14 @@ function Get-LinearIssue {
 
         [Parameter(ParameterSetName = 'List')]
         [switch] $CurrentCycle,
+
+        [Parameter(ParameterSetName = 'List')]
+        [ValidateNotNullOrEmpty()]
+        [string] $Cycle,
+
+        [Parameter(ParameterSetName = 'List')]
+        [ValidateNotNullOrEmpty()]
+        [string] $Milestone,
 
         [Parameter(ParameterSetName = 'List')]
         [ValidateNotNull()]
@@ -218,6 +246,10 @@ function Get-LinearIssue {
             $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message 'Use either -Assignee or -Unassigned, not both.' `
                         -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument))
         }
+        if ($CurrentCycle -and $Cycle) {
+            $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message 'Use either -CurrentCycle or -Cycle, not both.' `
+                        -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument))
+        }
 
         try {
             $issueFilter = @{}
@@ -241,19 +273,11 @@ function Get-LinearIssue {
                 $issueFilter['assignee'] = @{ null = $true }
             }
             elseif ($Assignee) {
-                $parsedGuid = [guid]::Empty
-                $issueFilter['assignee'] = if ($Assignee -eq 'me') {
-                    @{ isMe = @{ eq = $true } }
-                }
-                elseif ($Assignee -match '@') {
-                    @{ email = @{ eqIgnoreCase = $Assignee } }
-                }
-                elseif ([guid]::TryParse($Assignee, [ref]$parsedGuid)) {
-                    @{ id = @{ eq = $Assignee } }
-                }
-                else {
-                    @{ or = @(@{ name = @{ eqIgnoreCase = $Assignee } }, @{ displayName = @{ eqIgnoreCase = $Assignee } }) }
-                }
+                $issueFilter['assignee'] = ConvertTo-LinearUserFilter -User $Assignee
+            }
+
+            if ($Delegate) {
+                $issueFilter['delegate'] = ConvertTo-LinearUserFilter -User $Delegate
             }
 
             if ($Label) {
@@ -280,6 +304,26 @@ function Get-LinearIssue {
 
             if ($CurrentCycle) {
                 $issueFilter['cycle'] = @{ isActive = @{ eq = $true } }
+            }
+            elseif ($Cycle) {
+                $issueFilter['cycle'] = switch -Regex ($Cycle) {
+                    '^(active|current)$' { @{ isActive = @{ eq = $true } } }
+                    '^next$' { @{ isNext = @{ eq = $true } } }
+                    '^previous$' { @{ isPrevious = @{ eq = $true } } }
+                    '^\d+$' { @{ number = @{ eq = [int]$Cycle } } }
+                    default {
+                        if (Test-LinearGuid -Value $Cycle) { @{ id = @{ eq = $Cycle } } } else { @{ name = @{ eqIgnoreCase = $Cycle } } }
+                    }
+                }
+            }
+
+            if ($Milestone) {
+                $issueFilter['projectMilestone'] = if (Test-LinearGuid -Value $Milestone) {
+                    @{ id = @{ eq = $Milestone } }
+                }
+                else {
+                    @{ name = @{ eqIgnoreCase = $Milestone } }
+                }
             }
 
             if ($Filter) {

@@ -89,6 +89,17 @@ Describe 'Get-LinearIssue' {
             $issue.PriorityLabel | Should -Be 'High'
         }
 
+        It 'flattens the milestone and delegate' {
+            Mock -ModuleName PSLinear Send-LinearHttpRequest {
+                New-LinearTestResponse -Data @{ issue = (New-LinearTestIssueNode -Identifier 'ENG-5' -Milestone 'Beta' -Delegate 'Agent Smith') }
+            }
+            $issue = Get-LinearIssue ENG-5
+            $issue.Milestone | Should -Be 'Beta'
+            $issue.MilestoneId | Should -Be 'milestone-x'
+            $issue.Delegate | Should -Be 'Agent Smith'
+            $issue.DelegateId | Should -Be 'user-agent'
+        }
+
         It 'handles missing nested objects and empty label lists' {
             $issues = @(Get-LinearIssue)
             $issues[1].Assignee | Should -BeNullOrEmpty
@@ -194,6 +205,36 @@ Describe 'Get-LinearIssue' {
             Get-LinearIssue -Priority 0, High | Out-Null
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
                 ((Get-RequestBody $Body).variables.filter.priority.in -join ',') -eq '0,2'
+            }
+        }
+
+        It 'filters by cycle: <Cycle>' -ForEach @(
+            @{ Cycle = 'next'; Key = 'isNext'; Value = $true }
+            @{ Cycle = 'current'; Key = 'isActive'; Value = $true }
+            @{ Cycle = 'previous'; Key = 'isPrevious'; Value = $true }
+        ) {
+            Get-LinearIssue -Cycle $Cycle | Out-Null
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
+                (Get-RequestVariable $Body "filter.cycle.$Key.eq") -eq $Value
+            }
+        }
+
+        It 'filters by cycle number or name' {
+            Get-LinearIssue -Cycle 12 | Out-Null
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter { (Get-RequestVariable $Body 'filter.cycle.number.eq') -eq 12 }
+            Get-LinearIssue -Cycle 'Release sprint' | Out-Null
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter { (Get-RequestVariable $Body 'filter.cycle.name.eqIgnoreCase') -eq 'Release sprint' }
+        }
+
+        It 'rejects -Cycle together with -CurrentCycle' {
+            { Get-LinearIssue -Cycle next -CurrentCycle } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*'
+        }
+
+        It 'filters by milestone and delegate' {
+            Get-LinearIssue -Milestone Beta -Delegate me | Out-Null
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
+                (Get-RequestVariable $Body 'filter.projectMilestone.name.eqIgnoreCase') -eq 'Beta' -and
+                (Get-RequestVariable $Body 'filter.delegate.isMe.eq') -eq $true
             }
         }
 

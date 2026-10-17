@@ -124,6 +124,12 @@ New-LinearIssue -Team ENG -Title 'Login fails on Safari' -Label Bug -Priority Hi
 # Create a sub-issue, due in a week
 New-LinearIssue -Team ENG -Title 'Write tests for the retry logic' -Parent ENG-412 -DueDate (Get-Date).AddDays(7)
 
+# From a template, planned for the next cycle and a project milestone
+New-LinearIssue -Team ENG -Title 'Payment fails on retry' -Template 'Bug report' -Cycle next -Project Checkout -Milestone Beta
+
+# Move the unstarted issues of the current cycle to the next one
+Get-LinearIssue -Team ENG -Cycle active -StateType Unstarted | Set-LinearIssue -Cycle next
+
 # Start work on an issue
 Set-LinearIssue ENG-412 -State 'In Progress' -Assignee me
 
@@ -174,8 +180,9 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { 
 | `Get-LinearLabel` | Labels in the workspace, or the labels a team can use. |
 | `Get-LinearProject` | Projects with status, lead, target date and progress. |
 | `Get-LinearCycle` | Cycles per team, with `-Active`, `-Next`, `-Previous` and `-Number`. |
+| `Get-LinearTemplate` | Issue, project and document templates, optionally those a team can use. |
 | `Get-LinearIssue` | Issues by identifier or URL, or filtered lists with paging. |
-| `New-LinearIssue` | Create an issue, with states, labels, projects and users given by name. |
+| `New-LinearIssue` | Create an issue, with states, labels, projects, milestones, cycles, users and templates given by name. |
 | `Set-LinearIssue` | Change issues: state, assignee, labels (replace, add or remove), priority and more, or clear values with `-Clear`. |
 | `Remove-LinearIssue` | Move issues to the trash, or archive them with `-Archive`. |
 | `Get-LinearComment` | Comments on an issue or project, thread by thread. |
@@ -257,7 +264,6 @@ publish. A mistake means a new version, not a re-tag.
 ## Roadmap
 
 - Milestones
-- `-Cycle`, `-Milestone` and `-Delegate` on `New-LinearIssue` and `Set-LinearIssue`
 - Tab completion for `-State`, `-Label` and `-Assignee`
 - Markdown help with platyPS and an online help URI
 

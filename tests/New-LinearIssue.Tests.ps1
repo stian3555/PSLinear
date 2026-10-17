@@ -129,6 +129,32 @@ Describe 'New-LinearIssue' {
             $estimateWarnings.Count | Should -Be 0
         }
 
+        It 'resolves the cycle, milestone, delegate and template' {
+            New-LinearIssue -Team ENG -Title 'x' -Cycle next -Project Website -Milestone Beta -Delegate 'Grace Hopper' -Template 'Bug report' | Out-Null
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                (Get-RequestOperation $Body) -eq 'CreateIssue' -and
+                (Get-RequestVariable $Body 'input.cycleId') -eq 'cycle-eng-13' -and
+                (Get-RequestVariable $Body 'input.projectId') -eq 'project-web' -and
+                (Get-RequestVariable $Body 'input.projectMilestoneId') -eq 'milestone-beta' -and
+                (Get-RequestVariable $Body 'input.delegateId') -eq 'user-grace' -and
+                (Get-RequestVariable $Body 'input.templateId') -eq 'template-eng-bug'
+            }
+        }
+
+        It 'needs -Project for a milestone name, but not for a milestone id' {
+            { New-LinearIssue -Team ENG -Title 'x' -Milestone Beta } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*' -ExpectedMessage '*give -Project with -Milestone*'
+            $milestoneId = [guid]::NewGuid().Guid
+            New-LinearIssue -Team ENG -Title 'x' -Milestone $milestoneId | Out-Null
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
+                (Get-RequestVariable $Body 'input.projectMilestoneId') -eq $milestoneId
+            }
+        }
+
+        It 'stops on an unknown cycle or template' {
+            { New-LinearIssue -Team ENG -Title 'x' -Cycle 'Sprint 99' } | Should -Throw -ErrorId 'PSLinear.CycleNotFound*'
+            { New-LinearIssue -Team ENG -Title 'x' -Template 'Nope' } | Should -Throw -ErrorId 'PSLinear.TemplateNotFound*'
+        }
+
         It 'resolves -Assignee me to the connected user' {
             New-LinearIssue -Team ENG -Title 'x' -Assignee me | Out-Null
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -ParameterFilter {
@@ -149,7 +175,8 @@ Describe 'New-LinearIssue' {
 
     Context '-WhatIf' {
         It 'sends no request, not even name lookups' {
-            New-LinearIssue -Team ENG -Title 'x' -State Todo -Assignee me -Label Bug -Project Website -WhatIf | Should -BeNullOrEmpty
+            New-LinearIssue -Team ENG -Title 'x' -State Todo -Assignee me -Label Bug -Project Website -Milestone Beta -Cycle next -Delegate grace -Template 'Bug report' -WhatIf |
+                Should -BeNullOrEmpty
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
         }
 

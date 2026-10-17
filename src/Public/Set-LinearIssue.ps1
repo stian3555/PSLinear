@@ -58,7 +58,18 @@ function Set-LinearIssue {
         Label names or ids to remove, keeping the other labels.
 
     .PARAMETER Project
-        Project name or id.
+        Project name, slug id, URL or id.
+
+    .PARAMETER Milestone
+        The project milestone, by name within -Project (or the issue's current project), or by id.
+
+    .PARAMETER Cycle
+        The cycle: active (or current), next, previous, an offset from the active cycle such as
+        +1, a cycle number, a cycle name, or an id. Resolved in the issue's team.
+
+    .PARAMETER Delegate
+        The agent to delegate the issue to, separate from the assignee: an email address, a user
+        id, or the agent's name or display name.
 
     .PARAMETER Estimate
         The estimate, in the team's estimation scale (for example story points). Linear ignores
@@ -71,9 +82,9 @@ function Set-LinearIssue {
         The parent issue's identifier (ENG-123), id or URL, which makes this a sub-issue.
 
     .PARAMETER Clear
-        Removes values from the issue: Estimate, DueDate, Parent, Project, Cycle, or Labels (all
-        labels). Use -Unassign to remove the assignee, and -Description '' to clear the
-        description.
+        Removes values from the issue: Estimate, DueDate, Parent, Project, Milestone, Cycle,
+        Delegate, or Labels (all labels). Use -Unassign to remove the assignee, and
+        -Description '' to clear the description.
 
     .PARAMETER PassThru
         Returns the updated issues.
@@ -97,6 +108,11 @@ function Set-LinearIssue {
         Set-LinearIssue ENG-123 -Team OPS -State Todo -PassThru
 
         Moves an issue to another team and returns it with its new identifier.
+
+    .EXAMPLE
+        Get-LinearIssue -Team ENG -Cycle active -StateType Unstarted | Set-LinearIssue -Cycle next
+
+        Moves the unstarted issues of the current cycle to the next one.
 
     .EXAMPLE
         Set-LinearIssue ENG-123 -Clear DueDate, Cycle
@@ -163,6 +179,15 @@ function Set-LinearIssue {
         [ValidateNotNullOrEmpty()]
         [string] $Project,
 
+        [ValidateNotNullOrEmpty()]
+        [string] $Milestone,
+
+        [ValidateNotNullOrEmpty()]
+        [string] $Cycle,
+
+        [ValidateNotNullOrEmpty()]
+        [string] $Delegate,
+
         [ValidateRange(0, [int]::MaxValue)]
         [int] $Estimate,
 
@@ -171,7 +196,7 @@ function Set-LinearIssue {
         [ValidateNotNullOrEmpty()]
         [string] $Parent,
 
-        [ValidateSet('Estimate', 'DueDate', 'Parent', 'Project', 'Cycle', 'Labels')]
+        [ValidateSet('Estimate', 'DueDate', 'Parent', 'Project', 'Milestone', 'Cycle', 'Delegate', 'Labels')]
         [string[]] $Clear,
 
         [switch] $PassThru
@@ -179,18 +204,20 @@ function Set-LinearIssue {
 
     begin {
         $changeParameters = @(
-            'Team', 'Title', 'Description', 'State', 'Assignee', 'Unassign', 'Priority'
-            'Label', 'AddLabel', 'RemoveLabel', 'Project', 'Estimate', 'DueDate', 'Parent', 'Clear'
+            'Team', 'Title', 'Description', 'State', 'Assignee', 'Unassign', 'Delegate', 'Priority'
+            'Label', 'AddLabel', 'RemoveLabel', 'Project', 'Milestone', 'Cycle', 'Estimate', 'DueDate', 'Parent', 'Clear'
         )
         $changes = Format-LinearChangeList -BoundParameters $PSBoundParameters -Name $changeParameters
 
         # IssueUpdateInput fields that -Clear sets to null. Labels is cleared with an empty list.
         $clearFields = @{
-            Estimate = 'estimate'
-            DueDate  = 'dueDate'
-            Parent   = 'parentId'
-            Project  = 'projectId'
-            Cycle    = 'cycleId'
+            Estimate  = 'estimate'
+            DueDate   = 'dueDate'
+            Parent    = 'parentId'
+            Project   = 'projectId'
+            Milestone = 'projectMilestoneId'
+            Cycle     = 'cycleId'
+            Delegate  = 'delegateId'
         }
         $clearConflicts = @(foreach ($field in $Clear) {
                 $parameters = if ($field -eq 'Labels') { 'Label', 'AddLabel', 'RemoveLabel' } else { $field }
@@ -215,8 +242,11 @@ function Set-LinearIssue {
             $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message $invalidMessage -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument))
         }
 
-        # Workflow states, labels and estimation settings belong to a team, so these need the issue's team id.
-        $needsTeamId = [bool]($State -or $Label -or $AddLabel -or $RemoveLabel -or $PSBoundParameters.ContainsKey('Estimate'))
+        # Workflow states, labels, cycles and estimation settings belong to a team, so these need
+        # the issue's team id; a milestone name needs the issue's project unless -Project is given.
+        $cycleByName = $Cycle -and -not (Test-LinearGuid -Value $Cycle)
+        $needsTeamId = [bool]($State -or $Label -or $AddLabel -or $RemoveLabel -or $cycleByName -or $PSBoundParameters.ContainsKey('Estimate'))
+        $needsProjectId = [bool]($Milestone -and -not $Project -and -not (Test-LinearGuid -Value $Milestone))
         $updateQuery = Get-LinearGraphQLDocument -Name 'UpdateIssue'
     }
 
@@ -234,15 +264,17 @@ function Set-LinearIssue {
             }
 
             $teamId = $target.TeamId
-            if ($needsTeamId -and -not $Team -and -not $teamId) {
-                $lookup = Invoke-LinearRequest -Query (Get-LinearGraphQLDocument -Name 'GetIssueTeam') -Variables @{ id = $target.Id } -IncludeErrors
-                $teamId = Get-LinearNestedValue -InputObject $lookup.Data -Name 'issue.team.id'
-                if ($null -eq $teamId) {
+            $projectId = $target.ProjectId
+            if (($needsTeamId -and -not $Team -and -not $teamId) -or ($needsProjectId -and -not $projectId)) {
+                $lookup = Get-LinearIssueReference -Id $target.Id
+                if ($null -eq $lookup.Issue) {
                     $message = Format-LinearFailureMessage -Message "Issue '$($target.Name)' was not found." -Errors $lookup.Errors
                     $PSCmdlet.WriteError((New-LinearErrorRecord -Message $message `
                                 -ErrorId 'PSLinear.IssueNotFound' -Category ObjectNotFound -TargetObject $target.Name))
                     continue
                 }
+                if (-not $teamId) { $teamId = Get-LinearNestedValue -InputObject $lookup.Issue -Name 'team.id' }
+                if (-not $projectId) { $projectId = Get-LinearNestedValue -InputObject $lookup.Issue -Name 'project.id' }
             }
 
             try {
@@ -261,6 +293,21 @@ function Set-LinearIssue {
                 if ($AddLabel) { $issueInput['addedLabelIds'] = @(Resolve-LinearLabelId -TeamId $teamId -Label $AddLabel) }
                 if ($RemoveLabel) { $issueInput['removedLabelIds'] = @(Resolve-LinearLabelId -TeamId $teamId -Label $RemoveLabel) }
                 if ($Project) { $issueInput['projectId'] = Resolve-LinearProjectId -Project $Project }
+                if ($Milestone) {
+                    $milestoneProjectId = if ($issueInput.ContainsKey('projectId')) { $issueInput['projectId'] } else { $projectId }
+                    if (Test-LinearGuid -Value $Milestone) {
+                        $issueInput['projectMilestoneId'] = $Milestone
+                    }
+                    elseif ($milestoneProjectId) {
+                        $issueInput['projectMilestoneId'] = Resolve-LinearMilestoneId -ProjectId $milestoneProjectId -Milestone $Milestone
+                    }
+                    else {
+                        throw (New-LinearErrorRecord -Message "Issue '$($target.Name)' is not in a project. Give -Project with -Milestone, or a milestone id." `
+                                -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument -TargetObject $Milestone)
+                    }
+                }
+                if ($Cycle) { $issueInput['cycleId'] = Resolve-LinearCycleId -TeamId $teamId -Cycle $Cycle }
+                if ($Delegate) { $issueInput['delegateId'] = Resolve-LinearUserId -User $Delegate }
                 if ($PSBoundParameters.ContainsKey('Estimate')) {
                     if (-not (Test-LinearTeamUsesEstimate -TeamId $teamId)) {
                         Write-Warning "Team $(Get-LinearTeamKey -TeamId $teamId) does not use estimates, so Linear ignores -Estimate. Turn on estimates in the team's settings to use it."

@@ -39,7 +39,22 @@ function New-LinearIssue {
         Label names or ids. Workspace labels and the team's own labels can be used.
 
     .PARAMETER Project
-        Project name or id.
+        Project name, slug id, URL or id.
+
+    .PARAMETER Milestone
+        The project milestone, by name within -Project, or by id.
+
+    .PARAMETER Cycle
+        The cycle: active (or current), next, previous, an offset from the active cycle such as
+        +1, a cycle number, a cycle name, or an id.
+
+    .PARAMETER Delegate
+        The agent to delegate the issue to, separate from the assignee: an email address, a user
+        id, or the agent's name or display name.
+
+    .PARAMETER Template
+        An issue template, by name or id, from the team's or the workspace's templates. Values you
+        give in other parameters override the template's.
 
     .PARAMETER Estimate
         The estimate, in the team's estimation scale (for example story points). Linear ignores
@@ -65,6 +80,11 @@ function New-LinearIssue {
         New-LinearIssue -Team ENG -Title 'Write tests for the retry logic' -Parent ENG-412 -Estimate 2 -DueDate (Get-Date).AddDays(7)
 
         Creates a sub-issue of ENG-412, due in a week.
+
+    .EXAMPLE
+        New-LinearIssue -Team ENG -Title 'Payment fails on retry' -Template 'Bug report' -Cycle next -Project Checkout -Milestone 'Beta'
+
+        Creates an issue from a template, planned for the next cycle and a project milestone.
 
     .EXAMPLE
         Get-LinearTeam -Name ENG, OPS | New-LinearIssue -Title 'Rotate the API keys' -WhatIf
@@ -114,6 +134,18 @@ function New-LinearIssue {
         [ValidateNotNullOrEmpty()]
         [string] $Project,
 
+        [ValidateNotNullOrEmpty()]
+        [string] $Milestone,
+
+        [ValidateNotNullOrEmpty()]
+        [string] $Cycle,
+
+        [ValidateNotNullOrEmpty()]
+        [string] $Delegate,
+
+        [ValidateNotNullOrEmpty()]
+        [string] $Template,
+
         [ValidateRange(0, [int]::MaxValue)]
         [int] $Estimate,
 
@@ -125,7 +157,7 @@ function New-LinearIssue {
 
     process {
         $changes = Format-LinearChangeList -BoundParameters $PSBoundParameters `
-            -Name 'Description', 'State', 'Assignee', 'Priority', 'Label', 'Project', 'Estimate', 'DueDate', 'Parent'
+            -Name 'Template', 'Description', 'State', 'Assignee', 'Delegate', 'Priority', 'Label', 'Project', 'Milestone', 'Cycle', 'Estimate', 'DueDate', 'Parent'
         $action = if ($changes) { "Create issue '$Title' ($changes)" } else { "Create issue '$Title'" }
         if (-not $PSCmdlet.ShouldProcess("team $Team", $action)) {
             return
@@ -143,6 +175,21 @@ function New-LinearIssue {
             if ($Priority) { $issueInput['priority'] = ConvertTo-LinearPriority -Priority $Priority }
             if ($Label) { $issueInput['labelIds'] = @(Resolve-LinearLabelId -TeamId $teamId -Label $Label) }
             if ($Project) { $issueInput['projectId'] = Resolve-LinearProjectId -Project $Project }
+            if ($Milestone) {
+                if (Test-LinearGuid -Value $Milestone) {
+                    $issueInput['projectMilestoneId'] = $Milestone
+                }
+                elseif ($issueInput.ContainsKey('projectId')) {
+                    $issueInput['projectMilestoneId'] = Resolve-LinearMilestoneId -ProjectId $issueInput['projectId'] -Milestone $Milestone
+                }
+                else {
+                    throw (New-LinearErrorRecord -Message 'Milestones belong to a project: give -Project with -Milestone, or a milestone id.' `
+                            -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument -TargetObject $Milestone)
+                }
+            }
+            if ($Cycle) { $issueInput['cycleId'] = Resolve-LinearCycleId -TeamId $teamId -Cycle $Cycle }
+            if ($Delegate) { $issueInput['delegateId'] = Resolve-LinearUserId -User $Delegate }
+            if ($Template) { $issueInput['templateId'] = Resolve-LinearTemplateId -TeamId $teamId -Template $Template }
             if ($PSBoundParameters.ContainsKey('Estimate')) {
                 if (-not (Test-LinearTeamUsesEstimate -TeamId $teamId)) {
                     Write-Warning "Team $(Get-LinearTeamKey -TeamId $teamId) does not use estimates, so Linear ignores -Estimate. Turn on estimates in the team's settings to use it."

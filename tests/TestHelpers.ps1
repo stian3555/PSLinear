@@ -50,7 +50,9 @@ function New-LinearTestIssueNode {
         [string] $StateType = 'unstarted',
         [string] $Assignee = 'Ada Lovelace',
         [string[]] $Labels = @('Bug'),
-        [int] $Priority = 2
+        [int] $Priority = 2,
+        [string] $Milestone,
+        [string] $Delegate
     )
     $number = [int]($Identifier -replace '^.*-', '')
     [ordered]@{
@@ -78,6 +80,8 @@ function New-LinearTestIssueNode {
         project       = $null
         cycle         = $null
         parent        = $null
+        delegate      = if ($Delegate) { @{ id = 'user-agent'; name = $Delegate } } else { $null }
+        projectMilestone = if ($Milestone) { @{ id = 'milestone-x'; name = $Milestone } } else { $null }
         labels        = @{ nodes = @(foreach ($label in $Labels) { @{ id = "label-$label"; name = $label } }) }
     }
 }
@@ -133,7 +137,10 @@ function Get-LinearTestLookupResponse {
     # Users:    Ada Lovelace (the viewer), Grace Hopper, two users named Alex Smith, and the
     #           disabled Old Timer (only with includeDisabled)
     # Projects: Website, Mobile App, and the archived Legacy (only with includeArchived)
-    # Cycles:   ENG 10 (past), 11 (previous), 12 (active), 13 (next); OPS 3 (active)
+    # Cycles:   ENG 10 (past), 11 (previous), 12 (active), 13 (next, named 'Release sprint'); OPS 3 (active)
+    # Milestones: Website has Alpha and Beta; Mobile App has none
+    # Templates: issue templates 'Bug report' (workspace and ENG's own) and 'Incident' (OPS),
+    #           project template 'Kickoff', document template 'RFC'
     param([Parameter(Mandatory)][hashtable] $Request)
 
     $query = $Request.query
@@ -248,6 +255,30 @@ function Get-LinearTestLookupResponse {
         return New-LinearTestResponse -Data @{ projects = New-LinearTestConnection -Nodes $projects }
     }
 
+    if ($query -match 'query ListProjectMilestones') {
+        $projectId = $variables.filter.project.id.eq
+        $nodes = if ($projectId -eq 'project-web') {
+            @(
+                @{ id = 'milestone-beta'; name = 'Beta'; description = $null; targetDate = '2026-12-01'; status = 'next'; progress = 0.1; sortOrder = 2; project = @{ id = 'project-web'; name = 'Website' } }
+                @{ id = 'milestone-alpha'; name = 'Alpha'; description = 'First cut'; targetDate = '2026-11-01'; status = 'done'; progress = 1; sortOrder = 1; project = @{ id = 'project-web'; name = 'Website' } }
+            )
+        }
+        else { @() }
+        return New-LinearTestResponse -Data @{ projectMilestones = New-LinearTestConnection -Nodes $nodes }
+    }
+
+    if ($query -match 'query ListTemplates') {
+        return New-LinearTestResponse -Data @{
+            templates = @(
+                @{ id = 'template-bug'; name = 'Bug report'; type = 'issue'; description = 'Workspace bug form'; content = '## Steps'; lastAppliedAt = $null; team = $null }
+                @{ id = 'template-eng-bug'; name = 'Bug report'; type = 'issue'; description = 'ENG bug form'; content = '## Repro'; lastAppliedAt = $null; team = @{ id = 'team-eng'; key = 'ENG' } }
+                @{ id = 'template-ops-incident'; name = 'Incident'; type = 'issue'; description = $null; content = $null; lastAppliedAt = $null; team = @{ id = 'team-ops'; key = 'OPS' } }
+                @{ id = 'template-kickoff'; name = 'Kickoff'; type = 'project'; description = $null; content = $null; lastAppliedAt = $null; team = $null }
+                @{ id = 'template-rfc'; name = 'RFC'; type = 'document'; description = $null; content = $null; lastAppliedAt = $null; team = $null }
+            )
+        }
+    }
+
     if ($query -match 'query ListCycles') {
         $filter = if ($variables.ContainsKey('filter')) { $variables.filter } else { @{} }
         $cycles = @(
@@ -255,7 +286,7 @@ function Get-LinearTestLookupResponse {
             @{ id = 'cycle-ops-3'; number = 3; team = 'team-ops'; flags = @('isActive') }
             @{ id = 'cycle-eng-12'; number = 12; team = 'team-eng'; flags = @('isActive') }
             @{ id = 'cycle-eng-10'; number = 10; team = 'team-eng'; flags = @('isPast') }
-            @{ id = 'cycle-eng-13'; number = 13; team = 'team-eng'; flags = @('isNext', 'isFuture') }
+            @{ id = 'cycle-eng-13'; number = 13; team = 'team-eng'; flags = @('isNext', 'isFuture'); name = 'Release sprint' }
             @{ id = 'cycle-eng-11'; number = 11; team = 'team-eng'; flags = @('isPrevious', 'isPast') }
         )
         $nodes = foreach ($cycle in $cycles) {
@@ -265,7 +296,7 @@ function Get-LinearTestLookupResponse {
             $node = [ordered]@{
                 id          = $cycle.id
                 number      = $cycle.number
-                name        = $null
+                name        = if ($cycle.ContainsKey('name')) { $cycle.name } else { $null }
                 startsAt    = '2026-10-12T00:00:00.000Z'
                 endsAt      = '2026-10-26T00:00:00.000Z'
                 completedAt = $null
