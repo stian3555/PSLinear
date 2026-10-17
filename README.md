@@ -91,17 +91,11 @@ Connect-Linear -SecretName LinearApiKey
 
 `Connect-Linear -Browser` opens Linear's consent page and receives the result on a local
 address, like the official Linear integrations do. It uses OAuth 2.0 with PKCE, so there is no
-client secret to keep. You need the client id of a Linear OAuth application:
-
-1. In Linear, go to **Settings > API > OAuth applications** and create an application. Its
-   name is shown on the consent page and cannot contain the word "Linear"; something like
-   "PSL" or "PowerShell CLI" works.
-2. Add these callback URLs:
-   `http://localhost:47821/callback` and `http://127.0.0.1:47821/callback`.
-3. Connect with its client id (or set `LINEAR_OAUTH_CLIENT_ID`):
+client secret to keep. You approve **PSL**, the project's public OAuth application, and the
+tokens go straight to your PowerShell session; the project never sees them or your data.
 
 ```powershell
-Connect-Linear -Browser -ClientId 'your-client-id' -SecretName LinearSignIn
+Connect-Linear -Browser -SecretName LinearSignIn
 ```
 
 Access tokens last 24 hours and are renewed automatically. With `-SecretName`, the refresh
@@ -109,6 +103,16 @@ token is saved in your SecretManagement vault, so later sessions sign in without
 `Disconnect-Linear -Revoke` revokes the tokens at Linear and removes the saved one. Use
 `-Scope` to ask for other permissions (`read`, `write`, `issues:create`, `comments:create`,
 `timeSchedule:write`, `admin`) and `-RedirectUri` to use another port.
+
+To sign in through your own OAuth application instead, for example to control what the consent
+page shows or to restrict sign-ins to your workspace:
+
+1. In Linear, go to **Settings > API > OAuth applications** and create an application. Its
+   name cannot contain the word "Linear".
+2. Add these callback URLs:
+   `http://localhost:47821/callback` and `http://127.0.0.1:47821/callback`.
+3. Connect with its client id, or set `LINEAR_OAUTH_CLIENT_ID`:
+   `Connect-Linear -Browser -ClientId 'your-client-id'`.
 
 ## Examples
 

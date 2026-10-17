@@ -51,8 +51,9 @@ and this project follows [Semantic Versioning](https://semver.org/).
   full project with its content, members and initiatives. Projects include their health,
   priority, teams and labels.
 - `Connect-Linear -Browser` signs in through Linear's consent page in the browser (OAuth 2.0
-  with PKCE and a local callback), with the client id of your OAuth application (`-ClientId` or
-  `LINEAR_OAUTH_CLIENT_ID`), `-Scope`, `-RedirectUri` and `-TimeoutSeconds`. Access tokens are
+  with PKCE and a local callback). It uses PSL, the project's public OAuth application, unless
+  `-ClientId` or `LINEAR_OAUTH_CLIENT_ID` names your own; `-Scope`, `-RedirectUri` and
+  `-TimeoutSeconds` adjust the sign-in. Access tokens are
   renewed automatically before they expire, and `-SecretName` saves the refresh token in a
   SecretManagement vault so later sessions sign in without the browser.
 - `Disconnect-Linear -Revoke` revokes an OAuth sign-in at Linear and removes the saved refresh
