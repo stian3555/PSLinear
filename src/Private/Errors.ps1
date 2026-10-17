@@ -86,6 +86,27 @@ function Format-LinearValueList {
     '{0} (and {1} more)' -f ($values[0..($script:MaxListedValues - 1)] -join ', '), ($values.Count - $script:MaxListedValues)
 }
 
+function Format-LinearFailureMessage {
+    <#
+    .SYNOPSIS
+        Appends the GraphQL errors from an -IncludeErrors response, if any, to a failure message.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)]
+        [string] $Message,
+
+        [AllowNull()]
+        [AllowEmptyCollection()]
+        [object[]] $Errors
+    )
+
+    $graphQLErrors = @($Errors | Where-Object { $null -ne $_ })
+    if ($graphQLErrors.Count -eq 0) { return $Message }
+    '{0} {1}' -f $Message, (Format-LinearErrorMessage -Errors $graphQLErrors)
+}
+
 function Format-LinearErrorMessage {
     <#
     .SYNOPSIS

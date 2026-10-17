@@ -17,6 +17,7 @@
         'Get-LinearTeam'
         'Get-LinearViewer'
         'Invoke-LinearGraphQL'
+        'New-LinearIssue'
     )
     CmdletsToExport      = @()
     VariablesToExport    = @()
