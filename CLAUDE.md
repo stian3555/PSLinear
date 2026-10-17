@@ -34,7 +34,7 @@ PowerShell 7.4+ only (`CompatiblePSEditions = Core`), cross-platform.
 
 **Errors.**
 - Build errors with `New-LinearErrorRecord -ErrorId 'PSLinear.<Name>'` and throw them via `$PSCmdlet.ThrowTerminatingError(...)`.
-- For expected per-item failures (such as not found), call `Invoke-LinearRequest -IncludeErrors` and `$PSCmdlet.WriteError(...)` once. Catching a nested terminating error would also add it to the caller's `-ErrorVariable`, giving duplicates.
+- For expected per-item failures (such as not found), call `Invoke-LinearRequest -IncludeErrors` (or `Invoke-LinearPagedRequest -IncludeErrors`, which collects the pages) and `$PSCmdlet.WriteError(...)` once. Catching a nested terminating error would also add it to the caller's `-ErrorVariable`, giving duplicates.
 
 **Pipelines.**
 - Never wrap code that emits pipeline output in `try/catch`. It breaks `Select-Object -First` stopping the upstream command.
@@ -46,7 +46,7 @@ PowerShell 7.4+ only (`CompatiblePSEditions = Core`), cross-platform.
 - Use a separate `[PSTypeName('PSLinear.Issue')] [object[]] $InputObject` parameter set for objects (see `Get-LinearIssue`).
 
 **Mutations.**
-- Every state-changing command uses `SupportsShouldProcess`: ConfirmImpact `Low` for New, `Medium` for Set, `High` for Remove/archive.
+- Every state-changing command uses `SupportsShouldProcess`: ConfirmImpact `Low` for New and Add, `Medium` for Set, `High` for Remove/archive.
 - `-WhatIf` must send no request; test that explicitly.
 - `Set-*` returns nothing unless `-PassThru` is given.
 
@@ -73,6 +73,7 @@ PowerShell 7.4+ only (`CompatiblePSEditions = Core`), cross-platform.
 - Never call the real Linear API from tests.
 - Mock the network boundary only: `Mock -ModuleName PSLinear Send-LinearHttpRequest { New-LinearTestResponse -Data @{ ... } }`. Assert on the request with `Should -Invoke ... -ParameterFilter { (Get-RequestBody $Body).variables... }`.
 - Mock bodies run in the test file's scope, so `$script:` there means the test file, not the module. Use `InModuleScope PSLinear { ... }` to read or set module state.
+- `build.ps1` runs Pester under `Set-StrictMode -Version Latest`, so mocks and parameter filters see strict mode too: dot notation on a missing key of a parsed request throws. Read request variables with `Get-RequestVariable $Body 'input.issueId'` (returns `$null` when missing) or index syntax, and run `Invoke-Pester` with `Set-StrictMode -Version Latest` locally to match.
 - Mock `Start-Sleep` in retry tests.
 - Each public command needs comment-based help: synopsis, description, every parameter, at least one example, and an `[OutputType()]`. `tests/Module.Tests.ps1` enforces this.
 

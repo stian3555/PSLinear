@@ -139,6 +139,11 @@ Get-LinearIssue -Assignee me -State 'In Review' | Set-LinearIssue -State Done -W
 # Close issues across teams whose done states have different names
 Get-LinearIssue -Label Duplicate -StateType Unstarted -All | Set-LinearIssue -State completed
 
+# Comment, reply and resolve
+Add-LinearComment ENG-412 'Deployed to staging.'
+Get-LinearComment ENG-412 | Select-Object -Last 1 | Add-LinearComment -Body 'Thanks, fixed.'
+Get-LinearComment ENG-412 | Where-Object { -not $_.IsReply -and -not $_.Resolved } | Set-LinearComment -Resolved $true
+
 # Move issues to the trash (asks per issue unless -Confirm:$false); -Archive archives instead
 Get-LinearIssue -Team ENG -Label Spam -All | Remove-LinearIssue
 
@@ -164,6 +169,10 @@ Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { 
 | `New-LinearIssue` | Create an issue, with states, labels, projects and users given by name. |
 | `Set-LinearIssue` | Change issues: state, assignee, labels (replace, add or remove), priority and more, or clear values with `-Clear`. |
 | `Remove-LinearIssue` | Move issues to the trash, or archive them with `-Archive`. |
+| `Get-LinearComment` | Comments on an issue or project, thread by thread. |
+| `Add-LinearComment` | Comment on an issue or project, or reply to a comment. |
+| `Set-LinearComment` | Edit a comment, or resolve or reopen its thread. |
+| `Remove-LinearComment` | Delete comments. |
 | `Get-LinearRateLimit` | Rate-limit status from the latest response. |
 | `Invoke-LinearGraphQL` | Run any GraphQL query or mutation. |
 
@@ -231,7 +240,7 @@ publish. A mistake means a new version, not a re-tag.
 
 ## Roadmap
 
-- Comments, issue relations, milestones and attachments
+- Issue relations, milestones and attachments
 - `-Cycle`, `-Milestone` and `-Delegate` on `New-LinearIssue` and `Set-LinearIssue`
 - Tab completion for `-State`, `-Label` and `-Assignee`
 - Markdown help with platyPS and an online help URI

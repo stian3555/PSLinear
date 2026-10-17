@@ -1,0 +1,8 @@
+mutation UnresolveComment($id: String!) {
+  commentUnresolve(id: $id) {
+    success
+    comment {
+      ...CommentFields
+    }
+  }
+}

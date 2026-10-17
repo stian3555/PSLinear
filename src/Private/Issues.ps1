@@ -10,7 +10,8 @@ function Format-LinearChangeList {
     [OutputType([string])]
     param(
         [Parameter(Mandatory)]
-        [System.Collections.Generic.IDictionary[string, object]] $BoundParameters,
+        # $PSBoundParameters or a hashtable; both have ContainsKey.
+        [System.Collections.IDictionary] $BoundParameters,
 
         [Parameter(Mandatory)]
         [string[]] $Name

@@ -1,0 +1,5 @@
+query GetComment($id: String!) {
+  comment(id: $id) {
+    ...CommentFields
+  }
+}
