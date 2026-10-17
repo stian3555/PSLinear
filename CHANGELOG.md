@@ -42,6 +42,17 @@ and this project follows [Semantic Versioning](https://semver.org/).
   a hashtable of string and number values on an attachment (other value types are refused), and
   attachments expose their `Metadata`, including what integrations store.
 - `-Project` parameters also accept a project's slug id and URL.
+- `New-LinearProject`, `Set-LinearProject` and `Remove-LinearProject`: create projects for one or
+  more teams, change their name, summary, content, lead, status (by name or type), priority,
+  dates, teams, labels and members (replace, add or remove), clear values, and move projects
+  to the trash (Linear archives their issues until the project is restored). Teams, users,
+  project statuses, project labels and project templates are given by name.
+- `Get-LinearProject` filters by `-Team` and `-Status`, and `-Id` (or piped projects) returns the
+  full project with its content, members and initiatives. Projects include their health,
+  priority, teams and labels.
+- `Get-LinearProjectUpdate`, `New-LinearProjectUpdate`, `Set-LinearProjectUpdate` and
+  `Remove-LinearProjectUpdate`: list a project's status updates newest first, post updates with
+  a health, edit them and remove them.
 
 ## [0.1.0] - 2026-10-17
 
