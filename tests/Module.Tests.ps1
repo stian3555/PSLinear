@@ -6,6 +6,10 @@ BeforeDiscovery {
             @{ Name = $_.Name; Command = $_ }
         })
     $script:graphQLOperations = @((Get-ChildItem -Path (Join-Path $PSScriptRoot '..' 'src' 'GraphQL') -Filter '*.graphql' -File).BaseName)
+    $confirmImpacts = @{ New = 'Low'; Set = 'Medium'; Remove = 'High' }
+    $script:stateChangingCommands = @(Get-Command -Module PSLinear -CommandType Function | Where-Object { $confirmImpacts.ContainsKey($_.Verb) } | ForEach-Object {
+            @{ Name = $_.Name; Command = $_; Impact = $confirmImpacts[$_.Verb] }
+        })
 }
 
 BeforeAll {
@@ -75,6 +79,14 @@ Describe 'Public command <Name>' -ForEach $script:publicCommands {
 
     It 'declares an output type' {
         $Command.OutputType | Should -Not -BeNullOrEmpty
+    }
+}
+
+Describe 'State-changing command <Name>' -ForEach $script:stateChangingCommands {
+    It 'supports -WhatIf and -Confirm with ConfirmImpact <Impact>' {
+        $binding = $Command.ScriptBlock.Attributes | Where-Object { $_ -is [System.Management.Automation.CmdletBindingAttribute] }
+        $binding.SupportsShouldProcess | Should -BeTrue
+        $binding.ConfirmImpact | Should -Be $Impact
     }
 }
 
