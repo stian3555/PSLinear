@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>PSLinear</title>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2563EB"/>
+      <stop offset="1" stop-color="#0B163A"/>
+    </linearGradient>
+  </defs>
+  <rect x="24" y="24" width="464" height="464" rx="104" fill="url(#tile)"/>
+  <polyline points="120,110 196,174 120,238" fill="none" stroke="#FFFFFF" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="224" y="206" width="96" height="34" rx="17" fill="#7DD3FC"/>
+  <circle cx="138" cy="310" r="16" fill="#4ADE80"/>
+  <rect x="176" y="296" width="232" height="28" rx="14" fill="#FFFFFF" fill-opacity="0.95"/>
+  <circle cx="138" cy="358" r="16" fill="#FACC15"/>
+  <rect x="176" y="344" width="188" height="28" rx="14" fill="#FFFFFF" fill-opacity="0.7"/>
+  <circle cx="138" cy="406" r="13.0" fill="none" stroke="#94A3B8" stroke-width="6"/>
+  <rect x="176" y="392" width="136" height="28" rx="14" fill="#FFFFFF" fill-opacity="0.45"/>
+</svg>
