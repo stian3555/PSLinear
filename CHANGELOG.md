@@ -6,6 +6,15 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `Connect-Linear -ClientCredential` signs in as an OAuth application with the client
+  credentials grant, for automation that runs without a person: issues and comments are
+  created by the application instead of the owner of an API key. The client id and secret are
+  given as a PSCredential and the secret is kept as a SecureString. PSLinear requests a new
+  token with the same `-Scope` before the 30-day token expires, and once more when Linear
+  rejects it. Token requests are retried after network and server errors.
+
 ### Changed
 
 - Mutations are no longer sent again after a server error (HTTP 5xx) or after a connection that

@@ -272,6 +272,11 @@ function Request-LinearOAuthToken {
     .DESCRIPTION
         Returns [pscustomobject]@{ AccessToken; RefreshToken; ExpiresAt; Scope }, with the tokens
         as SecureStrings. RefreshToken is $null when Linear does not return one.
+    .PARAMETER MaxRetries
+        How many times to send the request again after a network failure, a server error or the
+        rate limit. Use it only for grants that can be requested again safely, such as
+        client_credentials: Linear replaces a refresh token when it is used, so repeating a
+        refresh whose answer was lost would fail.
     .NOTES
         Throws an ErrorRecord (PSLinear.OAuthFailed) with Linear's error description.
     #>
@@ -279,15 +284,35 @@ function Request-LinearOAuthToken {
     [OutputType([pscustomobject])]
     param(
         [Parameter(Mandatory)]
-        [hashtable] $Form
+        [hashtable] $Form,
+
+        [ValidateRange(0, 10)]
+        [int] $MaxRetries = 0
     )
 
-    try {
-        $response = Send-LinearOAuthRequest -Uri $script:OAuthTokenUrl -Form $Form
-    }
-    catch {
-        throw (New-LinearErrorRecord -Message "Could not reach Linear to get an access token: $($_.Exception.Message)" `
-                -ErrorId 'PSLinear.OAuthFailed' -Category ConnectionError -TargetObject $script:OAuthTokenUrl)
+    $attempt = 0
+    while ($true) {
+        $attempt++
+        try {
+            $response = Send-LinearOAuthRequest -Uri $script:OAuthTokenUrl -Form $Form
+        }
+        catch {
+            if ($attempt -le $MaxRetries) {
+                $delay = Get-LinearRetryDelay -Attempt $attempt
+                Write-Verbose "The token request failed ($($_.Exception.Message)). Retrying in $delay ms (retry $attempt of $MaxRetries)."
+                Start-Sleep -Milliseconds $delay
+                continue
+            }
+            throw (New-LinearErrorRecord -Message "Could not reach Linear to get an access token: $($_.Exception.Message)" `
+                    -ErrorId 'PSLinear.OAuthFailed' -Category ConnectionError -TargetObject $script:OAuthTokenUrl)
+        }
+        if (($response.StatusCode -ge 500 -or $response.StatusCode -eq 429) -and $attempt -le $MaxRetries) {
+            $delay = Get-LinearRetryDelay -Attempt $attempt
+            Write-Verbose "The token request returned HTTP $($response.StatusCode). Retrying in $delay ms (retry $attempt of $MaxRetries)."
+            Start-Sleep -Milliseconds $delay
+            continue
+        }
+        break
     }
     $accessToken = Get-LinearNestedValue -InputObject $response.Content -Name 'access_token'
     if ($response.StatusCode -ge 400 -or -not $accessToken) {
@@ -307,6 +332,40 @@ function Request-LinearOAuthToken {
         RefreshToken = if ($refreshToken) { ConvertTo-LinearSecureString -Value $refreshToken } else { $null }
         ExpiresAt    = if ($expiresIn) { [datetimeoffset]::UtcNow.AddSeconds([double]$expiresIn) } else { $null }
         Scope        = Get-LinearNestedValue -InputObject $response.Content -Name 'scope'
+    }
+}
+
+function Request-LinearClientToken {
+    <#
+    .SYNOPSIS
+        Gets an access token for an OAuth application with the client credentials grant. Returns the
+        result of Request-LinearOAuthToken.
+    .DESCRIPTION
+        The token acts as the application (actor app), lasts 30 days and comes without a refresh
+        token, so a new one is requested the same way. Linear revokes the application's other app
+        tokens when a token is requested with other scopes, so renewals ask for the same scopes.
+    #>
+    [CmdletBinding()]
+    [OutputType([pscustomobject])]
+    param(
+        [Parameter(Mandatory)]
+        [string] $ClientId,
+
+        [Parameter(Mandatory)]
+        [securestring] $ClientSecret,
+
+        [Parameter(Mandatory)]
+        [string[]] $Scope,
+
+        [ValidateRange(0, 10)]
+        [int] $MaxRetries = 0
+    )
+
+    Request-LinearOAuthToken -MaxRetries $MaxRetries -Form @{
+        grant_type    = 'client_credentials'
+        client_id     = $ClientId
+        client_secret = [System.Net.NetworkCredential]::new('', $ClientSecret).Password
+        scope         = $Scope -join ','
     }
 }
 
@@ -333,7 +392,8 @@ function Save-LinearOAuthSecret {
 function Update-LinearOAuthToken {
     <#
     .SYNOPSIS
-        Gets a new access token with the context's refresh token, and saves the new refresh token.
+        Gets a new access token with the context's refresh token, and saves the new refresh token,
+        or with the context's client credentials.
     .NOTES
         Linear issues a new refresh token with every refresh, so the saved secret is updated too.
         Throws an ErrorRecord (PSLinear.TokenRefreshFailed) that asks the person to sign in again.
@@ -346,17 +406,28 @@ function Update-LinearOAuthToken {
         [object] $Context
     )
 
-    $form = @{
-        grant_type    = 'refresh_token'
-        refresh_token = [System.Net.NetworkCredential]::new('', $Context.RefreshToken).Password
-        client_id     = $Context.ClientId
+    if ($null -ne $Context.ClientSecret) {
+        try {
+            $tokens = Request-LinearClientToken -ClientId $Context.ClientId -ClientSecret $Context.ClientSecret -Scope $Context.Scope -MaxRetries $Context.MaxRetries
+        }
+        catch {
+            throw (New-LinearErrorRecord -Message "Could not get a new Linear access token with the client credentials ($($_.Exception.Message)). Check the client secret, then run Connect-Linear -ClientCredential again." `
+                    -ErrorId 'PSLinear.TokenRefreshFailed' -Category AuthenticationError)
+        }
     }
-    try {
-        $tokens = Request-LinearOAuthToken -Form $form
-    }
-    catch {
-        throw (New-LinearErrorRecord -Message "The Linear sign-in has expired and could not be renewed ($($_.Exception.Message)). Run Connect-Linear -Browser again." `
-                -ErrorId 'PSLinear.TokenRefreshFailed' -Category AuthenticationError)
+    else {
+        $form = @{
+            grant_type    = 'refresh_token'
+            refresh_token = [System.Net.NetworkCredential]::new('', $Context.RefreshToken).Password
+            client_id     = $Context.ClientId
+        }
+        try {
+            $tokens = Request-LinearOAuthToken -Form $form
+        }
+        catch {
+            throw (New-LinearErrorRecord -Message "The Linear sign-in has expired and could not be renewed ($($_.Exception.Message)). Run Connect-Linear -Browser again." `
+                    -ErrorId 'PSLinear.TokenRefreshFailed' -Category AuthenticationError)
+        }
     }
     $Context.Token = $tokens.AccessToken
     if ($null -ne $tokens.RefreshToken) { $Context.RefreshToken = $tokens.RefreshToken }
@@ -368,6 +439,22 @@ function Update-LinearOAuthToken {
     catch {
         Write-Warning "Could not save the renewed sign-in to secret '$($Context.SecretName)': $($_.Exception.Message)"
     }
+}
+
+function Test-LinearTokenRenewable {
+    <#
+    .SYNOPSIS
+        Returns whether the context holds an OAuth token that PSLinear can renew on its own: with a
+        refresh token, or with the client credentials.
+    #>
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param(
+        [Parameter(Mandatory)]
+        [object] $Context
+    )
+
+    $Context.AuthScheme -eq 'OAuth' -and ($null -ne $Context.RefreshToken -or $null -ne $Context.ClientSecret)
 }
 
 function Test-LinearTokenExpiring {
@@ -382,7 +469,7 @@ function Test-LinearTokenExpiring {
         [object] $Context
     )
 
-    $Context.AuthScheme -eq 'OAuth' -and $null -ne $Context.RefreshToken -and $null -ne $Context.ExpiresAt -and
+    (Test-LinearTokenRenewable -Context $Context) -and $null -ne $Context.ExpiresAt -and
     [datetimeoffset]::UtcNow -ge $Context.ExpiresAt.AddMinutes(-5)
 }
 

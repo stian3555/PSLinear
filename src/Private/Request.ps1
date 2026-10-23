@@ -195,7 +195,7 @@ function Invoke-LinearRequest {
         }
 
         $isAuthError = ($response.StatusCode -eq 401) -or (@($errors | Where-Object Code -EQ 'AUTHENTICATION_ERROR').Count -gt 0)
-        if ($isAuthError -and -not $renewed -and $context.AuthScheme -eq 'OAuth' -and $null -ne $context.RefreshToken) {
+        if ($isAuthError -and -not $renewed -and (Test-LinearTokenRenewable -Context $context)) {
             # The access token may have been revoked or expired early: renew it once and retry.
             $renewed = $true
             try {

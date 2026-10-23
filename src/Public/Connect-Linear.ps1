@@ -9,7 +9,8 @@ function Connect-Linear {
         organization.
 
         Credentials can come from a personal API key (prompted securely when omitted),
-        a sign-in in the browser (-Browser), an OAuth access token, a secret in a
+        a sign-in in the browser (-Browser), the client credentials of an OAuth application
+        (-ClientCredential), an OAuth access token, a secret in a
         Microsoft.PowerShell.SecretManagement vault, or the LINEAR_API_KEY environment variable.
 
         With -Browser, Linear's consent page opens in your browser (OAuth 2.0 with PKCE, so no
@@ -22,6 +23,15 @@ function Connect-Linear {
         automatically with the refresh token.
         Add -SecretName to save the refresh token in a SecretManagement vault, so the next
         Connect-Linear -Browser -SecretName in a new session signs in without the browser.
+
+        With -ClientCredential, PSLinear signs in as an OAuth application with the client
+        credentials grant, for automation that runs without a person. Linear then shows the
+        application, not the owner of an API key, as the creator of issues and comments. Turn on
+        client credentials for the application in Linear first. The token lasts 30 days; PSLinear
+        requests a new one with the same credentials before it expires, and once more when Linear
+        rejects it, so a long-running host only needs to connect once. Linear revokes the
+        application's other tokens when a token is requested with different scopes, so use the
+        same -Scope everywhere the application signs in.
 
         The token is kept as a SecureString and is only converted to plain text when a
         request header is built. Nothing is written to disk, except the refresh token in the
@@ -40,14 +50,20 @@ function Connect-Linear {
     .PARAMETER Browser
         Signs in through Linear's consent page in the browser.
 
+    .PARAMETER ClientCredential
+        The client id (as the user name) and client secret (as the password) of a Linear OAuth
+        application that allows client credentials, for example from Get-Credential or
+        [pscredential]::new($clientId, $secureSecret). The secret is kept as a SecureString, only
+        to request new tokens.
+
     .PARAMETER ClientId
         The client id of your own Linear OAuth application (Settings > API > OAuth applications
         in Linear). Defaults to the LINEAR_OAUTH_CLIENT_ID environment variable, or else PSL, the
         PSLinear project's public application. The client id is not a secret.
 
     .PARAMETER Scope
-        The permissions to ask for: read, write, issues:create, comments:create,
-        timeSchedule:write or admin. Defaults to read and write.
+        The permissions to ask for with -Browser or -ClientCredential: read, write,
+        issues:create, comments:create, timeSchedule:write or admin. Defaults to read and write.
 
     .PARAMETER RedirectUri
         The local address the browser returns to after you approve the sign-in. It must be one
@@ -78,7 +94,9 @@ function Connect-Linear {
 
     .PARAMETER MaxRetries
         How many times to retry a request that was rate limited or failed with a server or
-        network error. Defaults to 3.
+        network error. Defaults to 3. A mutation is only retried when Linear refused it because
+        of the rate limit or it never reached Linear, so a change is never made twice. With
+        -ClientCredential, token requests are retried the same way.
 
     .PARAMETER SkipValidation
         Stores the credential without calling the API to verify it.
@@ -123,6 +141,14 @@ function Connect-Linear {
 
         Signs in through your own OAuth application.
 
+    .EXAMPLE
+        $secret = ConvertTo-SecureString -String $env:LINEAR_CLIENT_SECRET -AsPlainText -Force
+        Connect-Linear -ClientCredential ([pscredential]::new($env:LINEAR_CLIENT_ID, $secret))
+
+        Signs in as an OAuth application, for example in a scheduled job or a function app,
+        with a client id and secret from the environment. Issues and comments are created by
+        the application.
+
     .INPUTS
         None.
 
@@ -149,11 +175,15 @@ function Connect-Linear {
         [Parameter(Mandatory, ParameterSetName = 'Browser')]
         [switch] $Browser,
 
+        [Parameter(Mandatory, ParameterSetName = 'ClientCredential')]
+        [pscredential] $ClientCredential,
+
         [Parameter(ParameterSetName = 'Browser')]
         [ValidateNotNullOrEmpty()]
         [string] $ClientId,
 
         [Parameter(ParameterSetName = 'Browser')]
+        [Parameter(ParameterSetName = 'ClientCredential')]
         [ValidateSet('read', 'write', 'issues:create', 'comments:create', 'timeSchedule:write', 'admin')]
         [string[]] $Scope = @('read', 'write'),
 
@@ -263,6 +293,19 @@ function Connect-Linear {
                 $oauth = @{ RefreshToken = $tokens.RefreshToken; ExpiresAt = $tokens.ExpiresAt; ClientId = $resolvedClientId }
                 if ($SecretName) { $oauth['SecretName'] = $SecretName }
                 if ($Vault) { $oauth['Vault'] = $Vault }
+            }
+            'ClientCredential' {
+                # The credential prompt on Windows can return the user name as '\<name>'.
+                $resolvedClientId = $ClientCredential.UserName.TrimStart('\')
+                if ([string]::IsNullOrWhiteSpace($resolvedClientId) -or $ClientCredential.Password.Length -eq 0) {
+                    throw 'The client credential needs the client id as the user name and the client secret as the password.'
+                }
+                $clientSecret = $ClientCredential.Password.Copy()
+                $clientSecret.MakeReadOnly()
+                $tokens = Request-LinearClientToken -ClientId $resolvedClientId -ClientSecret $clientSecret -Scope $Scope -MaxRetries $MaxRetries
+                $token = $tokens.AccessToken
+                $scheme = 'OAuth'
+                $oauth = @{ ExpiresAt = $tokens.ExpiresAt; ClientId = $resolvedClientId; ClientSecret = $clientSecret; Scope = $Scope }
             }
         }
     }
