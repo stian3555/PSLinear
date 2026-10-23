@@ -12,6 +12,10 @@ function Add-LinearAttachment {
         With -Url, links a URL to the issue. When the workspace has a matching integration (for
         example GitHub, Slack or Zendesk), Linear creates a rich attachment for it.
 
+        With -Url -NoRichLink, creates the link in one request with exactly the title, subtitle
+        and metadata you give, and updates it when the issue already has an attachment with that
+        URL, so automation can run the same command every time it syncs.
+
         To show an image inside a comment rather than in the sidebar, use
         Add-LinearComment -Attachment instead.
 
@@ -29,8 +33,8 @@ function Add-LinearAttachment {
         A URL to link to the issue.
 
     .PARAMETER Title
-        The attachment title. Defaults to the file name, or for -Url to a title Linear picks.
-        Only one file can be given a title.
+        The attachment title. Defaults to the file name, for -Url to a title Linear picks, and
+        for -Url -NoRichLink to the URL. Only one file can be given a title.
 
     .PARAMETER Subtitle
         The attachment subtitle, shown under the title.
@@ -41,11 +45,19 @@ function Add-LinearAttachment {
     .PARAMETER Public
         Uploads images to a public URL instead of a private one.
 
+    .PARAMETER NoRichLink
+        With -Url, creates the attachment in one request with the title, subtitle and metadata
+        given, instead of letting the workspace's integrations turn the link into a rich
+        attachment. A later call with the same URL and issue updates that attachment: it sets
+        the title (the URL when -Title is left out), and the subtitle and metadata when they are
+        given; -Metadata then replaces all of the metadata. To change some metadata values and
+        keep the others, use Set-LinearAttachment -AddMetadata.
+
     .PARAMETER Metadata
-        Your own data to store on the attachment, as a hashtable of string and number values,
-        for example @{ build = '1.4.2'; runId = 8812 }. For -Url the link is created first and
-        the metadata set right after, so integrations still get their rich links; your metadata
-        then replaces whatever the integration stored on the link.
+        Your own data to store on the attachment, as a hashtable of string, number and boolean
+        values, for example @{ build = '1.4.2'; runId = 8812; nightly = $true }. For -Url the
+        link is created first and the metadata set right after, so integrations still get their
+        rich links; your metadata then replaces whatever the integration stored on the link.
 
     .EXAMPLE
         Add-LinearAttachment ENG-123 ./screenshot.png
@@ -61,6 +73,12 @@ function Add-LinearAttachment {
         Add-LinearAttachment -Issue ENG-123 -Url https://github.com/acme/app/pull/42 -Title 'Fix PR'
 
         Links a pull request to an issue.
+
+    .EXAMPLE
+        Add-LinearAttachment ENG-123 -Url 'https://monitor.example/alerts/42' -Title 'Alert 42' -Subtitle 'Firing' -Metadata @{ alertId = 42; managed = $true } -NoRichLink
+
+        Creates an attachment that a sync job owns, or updates it when the issue already has an
+        attachment with this URL.
 
     .EXAMPLE
         Add-LinearAttachment ENG-123 ./report.html -Metadata @{ pipeline = 'nightly'; failures = 3 }
@@ -104,7 +122,6 @@ function Add-LinearAttachment {
         [ValidateNotNullOrEmpty()]
         [string] $Title,
 
-        [Parameter(ParameterSetName = 'File')]
         [ValidateNotNullOrEmpty()]
         [string] $Subtitle,
 
@@ -114,6 +131,9 @@ function Add-LinearAttachment {
 
         [Parameter(ParameterSetName = 'File')]
         [switch] $Public,
+
+        [Parameter(ParameterSetName = 'Url')]
+        [switch] $NoRichLink,
 
         [ValidateNotNull()]
         [System.Collections.IDictionary] $Metadata
@@ -131,6 +151,30 @@ function Add-LinearAttachment {
     process {
         $issueName = ConvertTo-LinearIssueIdentifier -Value $Issue
 
+        if ($NoRichLink) {
+            if (-not $PSCmdlet.ShouldProcess($issueName, "Create or update the attachment for '$Url'")) {
+                return
+            }
+            # attachmentCreate takes everything in one request, and updates the issue's attachment
+            # with the same URL instead of adding another one, so it is safe to send again.
+            $attachmentInput = @{
+                issueId = $issueName
+                url     = $Url
+                title   = if ($Title) { $Title } else { $Url }
+            }
+            if ($Subtitle) { $attachmentInput['subtitle'] = $Subtitle }
+            if ($null -ne $metadataInput) { $attachmentInput['metadata'] = $metadataInput }
+            $result = Invoke-LinearRequest -Query (Get-LinearGraphQLDocument -Name 'CreateAttachment') -Variables @{ input = $attachmentInput } -Idempotent -IncludeErrors
+            $attachment = Get-LinearNestedValue -InputObject $result.Data -Name 'attachmentCreate.attachment'
+            if (-not (Get-LinearNestedValue -InputObject $result.Data -Name 'attachmentCreate.success') -or $null -eq $attachment) {
+                $message = Format-LinearFailureMessage -Message "Linear did not attach '$Url' to $issueName." -Errors $result.Errors
+                $PSCmdlet.WriteError((New-LinearErrorRecord -Message $message -ErrorId 'PSLinear.AttachmentCreateFailed' -Category WriteError -TargetObject $issueName))
+                return
+            }
+            ConvertTo-LinearAttachment -InputObject $attachment
+            return
+        }
+
         if ($PSCmdlet.ParameterSetName -eq 'Url') {
             if (-not $PSCmdlet.ShouldProcess($issueName, "Attach link '$Url'")) {
                 return
@@ -144,13 +188,16 @@ function Add-LinearAttachment {
                 $PSCmdlet.WriteError((New-LinearErrorRecord -Message $message -ErrorId 'PSLinear.AttachmentCreateFailed' -Category WriteError -TargetObject $issueName))
                 return
             }
-            if ($null -ne $metadataInput) {
-                # attachmentLinkURL takes no metadata, so set it on the new link.
+            if ($null -ne $metadataInput -or $Subtitle) {
+                # attachmentLinkURL takes no subtitle or metadata, so set them on the new link.
+                $updateInput = @{ title = $attachment.title }
+                if ($Subtitle) { $updateInput['subtitle'] = $Subtitle }
+                if ($null -ne $metadataInput) { $updateInput['metadata'] = $metadataInput }
                 $update = Invoke-LinearRequest -Query (Get-LinearGraphQLDocument -Name 'UpdateAttachment') `
-                    -Variables @{ id = $attachment.id; input = @{ title = $attachment.title; metadata = $metadataInput } } -IncludeErrors
+                    -Variables @{ id = $attachment.id; input = $updateInput } -IncludeErrors
                 $updated = Get-LinearNestedValue -InputObject $update.Data -Name 'attachmentUpdate.attachment'
                 if (-not (Get-LinearNestedValue -InputObject $update.Data -Name 'attachmentUpdate.success') -or $null -eq $updated) {
-                    $message = Format-LinearFailureMessage -Message "Linked '$Url' to $issueName, but Linear did not store the metadata." -Errors $update.Errors
+                    $message = Format-LinearFailureMessage -Message "Linked '$Url' to $issueName, but Linear did not store the subtitle or metadata." -Errors $update.Errors
                     $PSCmdlet.WriteError((New-LinearErrorRecord -Message $message -ErrorId 'PSLinear.AttachmentUpdateFailed' -Category WriteError -TargetObject $attachment.id))
                 }
                 else {

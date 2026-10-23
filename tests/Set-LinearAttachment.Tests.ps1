@@ -69,9 +69,56 @@ Describe 'Set-LinearAttachment' {
         }
     }
 
-    It 'refuses metadata values that are not strings or numbers' {
+    It 'refuses metadata values that are not strings, numbers or booleans' {
         { Set-LinearAttachment -Id attachment-2 -Metadata @{ when = [datetime]'2026-01-01' } } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*'
+        { Set-LinearAttachment -Id attachment-2 -AddMetadata @{ when = [datetime]'2026-01-01' } } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*'
         Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
+    }
+
+    It 'adds and changes metadata values, keeping the others' {
+        $attachment = Set-LinearAttachment -Id attachment-2 -AddMetadata @{ status = 'closed'; synced = $true } -PassThru
+        $attachment.Metadata.synced | Should -BeTrue
+        Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter { (Get-RequestOperation $Body) -eq 'GetAttachment' }
+        Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+            (Get-RequestOperation $Body) -eq 'UpdateAttachment' -and
+            (Get-RequestVariable $Body 'input.title') -eq 'Fix login' -and
+            (Get-RequestVariable $Body 'input.metadata.status') -eq 'closed' -and
+            (Get-RequestVariable $Body 'input.metadata.synced') -eq $true -and
+            (Get-RequestVariable $Body 'input.metadata.reviews.approved') -eq 2
+        }
+    }
+
+    It 'removes metadata values, keeping the others' {
+        Set-LinearAttachment -Id attachment-2 -RemoveMetadata 'status', 'unknown'
+        Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+            $metadata = Get-RequestVariable $Body 'input.metadata'
+            (Get-RequestOperation $Body) -eq 'UpdateAttachment' -and $null -ne $metadata -and
+            -not $metadata.Contains('status') -and (Get-RequestVariable $Body 'input.metadata.reviews.approved') -eq 2
+        }
+    }
+
+    It 'merges into the current metadata, not the metadata of a piped attachment' {
+        $stale = [pscustomobject]@{ PSTypeName = 'PSLinear.Attachment'; Id = 'attachment-2'; Title = 'Old title'; Issue = 'ENG-1'; Metadata = [ordered]@{ old = 'value' } }
+        $stale | Set-LinearAttachment -AddMetadata @{ synced = $true }
+        Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+            $metadata = Get-RequestVariable $Body 'input.metadata'
+            (Get-RequestOperation $Body) -eq 'UpdateAttachment' -and -not $metadata.Contains('old') -and
+            (Get-RequestVariable $Body 'input.metadata.status') -eq 'merged' -and (Get-RequestVariable $Body 'input.title') -eq 'Fix login'
+        }
+    }
+
+    It 'refuses -Metadata together with -AddMetadata or -RemoveMetadata' {
+        { Set-LinearAttachment -Id attachment-2 -Metadata @{ a = 1 } -AddMetadata @{ b = 2 } } |
+            Should -Throw -ErrorId 'PSLinear.InvalidArgument*' -ExpectedMessage '*either -Metadata*'
+        { Set-LinearAttachment -Id attachment-2 -Metadata @{ a = 1 } -RemoveMetadata 'b' } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*'
+        Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
+    }
+
+    It 'writes one error when the attachment to merge metadata into does not exist' {
+        Set-LinearAttachment -Id missing -AddMetadata @{ a = 1 } -ErrorAction SilentlyContinue -ErrorVariable attachmentErrors
+        $attachmentErrors.Count | Should -Be 1
+        $attachmentErrors[0].FullyQualifiedErrorId | Should -BeLike 'PSLinear.AttachmentNotFound*'
+        Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly -ParameterFilter { (Get-RequestOperation $Body) -eq 'UpdateAttachment' }
     }
 
     It 'shows the metadata in the -WhatIf message' {

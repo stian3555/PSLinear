@@ -4,12 +4,18 @@ BeforeAll {
 
     function New-TestTokenResponse {
         # A token endpoint answer: 200 with tokens, or an OAuth error.
-        param([string] $AccessToken = 'access-1', [string] $RefreshToken = 'refresh-1', [int] $ExpiresIn = 86399, [string] $ErrorCode, [int] $StatusCode = 200)
+        param(
+            [string] $AccessToken = 'access-1', [string] $RefreshToken = 'refresh-1', [int] $ExpiresIn = 86399,
+            [string] $ErrorCode, [string] $ErrorDescription = "The grant is $ErrorCode.", [int] $StatusCode = 200
+        )
         $content = if ($ErrorCode) {
-            @{ error = $ErrorCode; error_description = "The grant is $ErrorCode." }
+            @{ error = $ErrorCode; error_description = $ErrorDescription }
         }
         else {
-            @{ access_token = $AccessToken; token_type = 'Bearer'; expires_in = $ExpiresIn; scope = 'read,write'; refresh_token = $RefreshToken }
+            $tokens = @{ access_token = $AccessToken; token_type = 'Bearer'; expires_in = $ExpiresIn; scope = 'read,write' }
+            # Client credentials tokens come without a refresh token.
+            if ($RefreshToken) { $tokens['refresh_token'] = $RefreshToken }
+            $tokens
         }
         [pscustomobject]@{ StatusCode = $StatusCode; Content = ConvertTo-TestObject -InputObject $content }
     }
@@ -335,6 +341,118 @@ Describe 'OAuth token renewal' {
         }
         { Get-LinearViewer } | Should -Throw -ErrorId 'PSLinear.AuthenticationFailed*'
         Should -Invoke Send-LinearOAuthRequest -ModuleName PSLinear -Times 0 -Exactly
+    }
+}
+
+Describe 'Connect-Linear -ClientCredential' {
+    BeforeEach {
+        $env:LINEAR_API_KEY = $null
+        InModuleScope PSLinear { $script:LinearContext = $null }
+        Mock -ModuleName PSLinear Send-LinearHttpRequest $script:viewerResponse
+        Mock -ModuleName PSLinear Send-LinearOAuthRequest { New-TestTokenResponse -AccessToken 'app-1' -RefreshToken '' -ExpiresIn 2591999 }
+        Mock -ModuleName PSLinear Start-Sleep {}
+        $script:credential = [pscredential]::new('client-1', (ConvertTo-SecureString -String 'secret-1' -AsPlainText -Force))
+    }
+
+    It 'requests an app token with the client credentials grant and connects with it' {
+        $context = Connect-Linear -ClientCredential $script:credential -PassThru
+        Should -Invoke Send-LinearOAuthRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+            $Form['grant_type'] -eq 'client_credentials' -and $Form['client_id'] -eq 'client-1' -and
+            $Form['client_secret'] -eq 'secret-1' -and $Form['scope'] -eq 'read,write' -and -not $Form.ContainsKey('refresh_token')
+        }
+        Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter { $Headers.Authorization -eq 'Bearer app-1' }
+        $context.AuthScheme | Should -Be 'OAuth'
+        $context.ClientId | Should -Be 'client-1'
+        $context.RefreshToken | Should -BeNullOrEmpty
+        ($context.ExpiresAt - [datetimeoffset]::UtcNow).TotalDays | Should -BeGreaterThan 29
+    }
+
+    It 'asks for the scopes given with -Scope' {
+        Connect-Linear -ClientCredential $script:credential -Scope read, issues:create, comments:create
+        Should -Invoke Send-LinearOAuthRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter { $Form['scope'] -eq 'read,issues:create,comments:create' }
+        (InModuleScope PSLinear { $script:LinearContext.Scope }) | Should -Be @('read', 'issues:create', 'comments:create')
+    }
+
+    It 'accepts a user name that the Windows credential prompt prefixed with a backslash' {
+        $credential = [pscredential]::new('\client-1', (ConvertTo-SecureString -String 'secret-1' -AsPlainText -Force))
+        Connect-Linear -ClientCredential $credential
+        Should -Invoke Send-LinearOAuthRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter { $Form['client_id'] -eq 'client-1' }
+    }
+
+    It 'never keeps the client secret or the token as plain text' {
+        $context = Connect-Linear -ClientCredential $script:credential -PassThru
+        $context.ClientSecret | Should -BeOfType [securestring]
+        $context.Token | Should -BeOfType [securestring]
+        @($context.PSObject.Properties.Value | Where-Object { $_ -is [string] -and $_ -in 'secret-1', 'app-1' }) | Should -HaveCount 0
+        ($context | Out-String) | Should -Not -Match 'secret-1|app-1'
+    }
+
+    It 'retries the token request after a network failure' {
+        $script:tokenCalls = 0
+        Mock -ModuleName PSLinear Send-LinearOAuthRequest {
+            $script:tokenCalls++
+            if ($script:tokenCalls -eq 1) { throw [System.Net.Http.HttpRequestException]::new('No such host') }
+            New-TestTokenResponse -AccessToken 'app-1' -RefreshToken ''
+        }
+        Connect-Linear -ClientCredential $script:credential
+        Should -Invoke Send-LinearOAuthRequest -ModuleName PSLinear -Times 2 -Exactly
+        Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter { $Headers.Authorization -eq 'Bearer app-1' }
+    }
+
+    It 'reports why Linear refused the credentials, and stays disconnected' {
+        Mock -ModuleName PSLinear Send-LinearOAuthRequest {
+            New-TestTokenResponse -ErrorCode 'unauthorized_client' -ErrorDescription 'Client does not support the client_credentials grant type' -StatusCode 400
+        }
+        { Connect-Linear -ClientCredential $script:credential } |
+            Should -Throw -ErrorId 'PSLinear.OAuthFailed*' -ExpectedMessage '*does not support the client_credentials grant type*'
+        Should -Invoke Send-LinearOAuthRequest -ModuleName PSLinear -Times 1 -Exactly
+        InModuleScope PSLinear { $script:LinearContext } | Should -BeNullOrEmpty
+    }
+
+    It 'refuses a credential without a client secret' {
+        $credential = [pscredential]::new('client-1', [securestring]::new())
+        { Connect-Linear -ClientCredential $credential } | Should -Throw -ErrorId 'PSLinear.InvalidCredential*' -ExpectedMessage '*client secret*'
+        Should -Invoke Send-LinearOAuthRequest -ModuleName PSLinear -Times 0 -Exactly
+    }
+}
+
+Describe 'Client credentials token renewal' {
+    BeforeEach {
+        $env:LINEAR_API_KEY = $null
+        InModuleScope PSLinear {
+            $script:LinearContext = New-LinearContext -Token (ConvertTo-LinearSecureString -Value 'app-old') -AuthScheme 'OAuth' -MaxRetries 0 `
+                -ExpiresAt ([datetimeoffset]::UtcNow.AddDays(20)) -ClientId 'client-1' -ClientSecret (ConvertTo-LinearSecureString -Value 'secret-1') -Scope 'read', 'write'
+        }
+        Mock -ModuleName PSLinear Send-LinearHttpRequest $script:viewerResponse
+        Mock -ModuleName PSLinear Send-LinearOAuthRequest { New-TestTokenResponse -AccessToken 'app-new' -RefreshToken '' -ExpiresIn 2591999 }
+    }
+
+    It 'requests a new app token with the same scopes before the old one expires' {
+        InModuleScope PSLinear { $script:LinearContext.ExpiresAt = [datetimeoffset]::UtcNow.AddMinutes(2) }
+        $null = Get-LinearViewer
+        Should -Invoke Send-LinearOAuthRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+            $Form['grant_type'] -eq 'client_credentials' -and $Form['client_secret'] -eq 'secret-1' -and $Form['scope'] -eq 'read,write'
+        }
+        Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter { $Headers.Authorization -eq 'Bearer app-new' }
+    }
+
+    It 'requests a new app token once when Linear rejects the current one' {
+        Mock -ModuleName PSLinear Send-LinearHttpRequest {
+            if ($Headers.Authorization -eq 'Bearer app-old') {
+                return New-LinearTestResponse -StatusCode 401 -Errors @(New-LinearTestError -Message 'Authentication required' -Code 'AUTHENTICATION_ERROR')
+            }
+            & $script:viewerResponse
+        }
+        (Get-LinearViewer).Name | Should -Be 'Ada Lovelace'
+        Should -Invoke Send-LinearOAuthRequest -ModuleName PSLinear -Times 1 -Exactly
+        Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 2 -Exactly
+    }
+
+    It 'asks to connect again when the client credentials no longer work' {
+        InModuleScope PSLinear { $script:LinearContext.ExpiresAt = [datetimeoffset]::UtcNow.AddMinutes(-1) }
+        Mock -ModuleName PSLinear Send-LinearOAuthRequest { New-TestTokenResponse -ErrorCode 'invalid_client' -StatusCode 401 }
+        { Get-LinearViewer } | Should -Throw -ErrorId 'PSLinear.TokenRefreshFailed*' -ExpectedMessage '*Connect-Linear -ClientCredential again*'
+        Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
     }
 }
 

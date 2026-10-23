@@ -5,6 +5,8 @@ function ConvertTo-LinearIssue {
     .NOTES
         Names are flattened for filtering and display (State, Assignee, Team), while the
         matching ids (StateId, AssigneeId, TeamId) are kept for piping into other commands.
+        A node that includes its attachments (ListIssuesWithAttachments) also gets an
+        Attachments property with PSLinear.Attachment objects.
     #>
     [CmdletBinding()]
     [OutputType('PSLinear.Issue')]
@@ -18,7 +20,7 @@ function ConvertTo-LinearIssue {
         if ($null -eq $InputObject) { return }
         $node = $InputObject
 
-        [pscustomobject]@{
+        $issue = [pscustomobject]@{
             PSTypeName    = 'PSLinear.Issue'
             Id            = $node.id
             Identifier    = $node.identifier
@@ -59,6 +61,11 @@ function ConvertTo-LinearIssue {
             MilestoneId   = Get-LinearNestedValue -InputObject $node -Name 'projectMilestone.id'
             DelegateId    = Get-LinearNestedValue -InputObject $node -Name 'delegate.id'
         }
+        if ($null -ne $node.PSObject.Properties['attachments']) {
+            $attachments = @(Get-LinearNestedValue -InputObject $node -Name 'attachments.nodes' | ConvertTo-LinearAttachment)
+            $issue | Add-Member -NotePropertyName 'Attachments' -NotePropertyValue $attachments
+        }
+        $issue
     }
 }
 

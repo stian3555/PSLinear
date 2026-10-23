@@ -1,0 +1,32 @@
+query ListIssuesWithAttachments(
+  $filter: IssueFilter
+  $first: Int
+  $after: String
+  $orderBy: PaginationOrderBy
+  $includeArchived: Boolean
+) {
+  issues(
+    filter: $filter
+    first: $first
+    after: $after
+    orderBy: $orderBy
+    includeArchived: $includeArchived
+  ) {
+    nodes {
+      ...IssueFields
+      attachments(first: 10) {
+        nodes {
+          ...AttachmentFields
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

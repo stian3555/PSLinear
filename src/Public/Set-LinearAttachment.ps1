@@ -24,9 +24,18 @@ function Set-LinearAttachment {
         The new subtitle. An empty string removes it.
 
     .PARAMETER Metadata
-        New metadata for the attachment, as a hashtable of string and number values. It replaces
-        the attachment's metadata; @{} removes it. To change one value, start from the current
-        metadata: $m = $attachment.Metadata; $m.status = 'done'; $attachment | Set-LinearAttachment -Metadata $m
+        New metadata for the attachment, as a hashtable of string, number and boolean values. It
+        replaces the attachment's metadata; @{} removes it. To change some values and keep the
+        rest, use -AddMetadata and -RemoveMetadata instead.
+
+    .PARAMETER AddMetadata
+        Metadata values to add or change, as a hashtable of string, number and boolean values.
+        The attachment's other metadata is kept, including what integrations store. The current
+        metadata is read just before the update, so a change made by someone else in between is
+        lost.
+
+    .PARAMETER RemoveMetadata
+        Names of metadata values to remove, keeping the others.
 
     .PARAMETER PassThru
         Returns the updated attachments.
@@ -45,6 +54,12 @@ function Set-LinearAttachment {
         Get-LinearAttachment ENG-123 | Where-Object { $_.Metadata.pipeline -eq 'nightly' } | Set-LinearAttachment -Metadata @{ pipeline = 'nightly'; failures = 0 }
 
         Updates the metadata of the attachments a nightly pipeline added.
+
+    .EXAMPLE
+        Get-LinearAttachment ENG-123 | Where-Object Url -Like 'https://monitor.example/*' | Set-LinearAttachment -AddMetadata @{ resolved = $true } -RemoveMetadata 'snoozedUntil'
+
+        Marks the monitoring attachments as resolved and removes one value, keeping the rest of
+        their metadata.
 
     .INPUTS
         System.String
@@ -76,17 +91,29 @@ function Set-LinearAttachment {
         [ValidateNotNull()]
         [System.Collections.IDictionary] $Metadata,
 
+        [ValidateNotNull()]
+        [System.Collections.IDictionary] $AddMetadata,
+
+        [ValidateNotNullOrEmpty()]
+        [string[]] $RemoveMetadata,
+
         [switch] $PassThru
     )
 
     begin {
-        $changes = Format-LinearChangeList -BoundParameters $PSBoundParameters -Name 'Title', 'Subtitle', 'Metadata'
+        $changes = Format-LinearChangeList -BoundParameters $PSBoundParameters -Name 'Title', 'Subtitle', 'Metadata', 'AddMetadata', 'RemoveMetadata'
         if (-not $changes) {
-            $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message 'Specify -Title, -Subtitle, -Metadata or a combination.' `
+            $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message 'Specify -Title, -Subtitle, -Metadata, -AddMetadata, -RemoveMetadata or a combination.' `
+                        -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument))
+        }
+        $mergeMetadata = $PSBoundParameters.ContainsKey('AddMetadata') -or $PSBoundParameters.ContainsKey('RemoveMetadata')
+        if ($mergeMetadata -and $PSBoundParameters.ContainsKey('Metadata')) {
+            $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message 'Use either -Metadata, which replaces all metadata, or -AddMetadata and -RemoveMetadata, not both.' `
                         -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument))
         }
         try {
             $metadataInput = if ($PSBoundParameters.ContainsKey('Metadata')) { ConvertTo-LinearAttachmentMetadataInput -Metadata $Metadata } else { $null }
+            $addMetadataInput = if ($PSBoundParameters.ContainsKey('AddMetadata')) { ConvertTo-LinearAttachmentMetadataInput -Metadata $AddMetadata } else { @{} }
         }
         catch {
             $PSCmdlet.ThrowTerminatingError($_)
@@ -110,26 +137,31 @@ function Set-LinearAttachment {
                 continue
             }
 
-            # Linear needs the title on every update, so keep the current one when only the subtitle changes.
-            $newTitle = $Title
-            if (-not $newTitle) {
-                $newTitle = $target.Title
-                if (-not $newTitle) {
-                    $lookup = Invoke-LinearRequest -Query (Get-LinearGraphQLDocument -Name 'GetAttachment') -Variables @{ id = $target.Id } -IncludeErrors
-                    $newTitle = Get-LinearNestedValue -InputObject $lookup.Data -Name 'attachment.title'
-                    if (-not $newTitle) {
-                        $message = Format-LinearFailureMessage -Message "Attachment '$($target.Id)' was not found." -Errors $lookup.Errors
-                        $PSCmdlet.WriteError((New-LinearErrorRecord -Message $message -ErrorId 'PSLinear.AttachmentNotFound' -Category ObjectNotFound -TargetObject $target.Id))
-                        continue
-                    }
+            # Linear needs the title on every update, so keep the current one when only the subtitle
+            # changes. Merging metadata always reads the attachment, so it starts from the latest values.
+            $current = $null
+            if ($mergeMetadata -or (-not $Title -and -not $target.Title)) {
+                $lookup = Invoke-LinearRequest -Query (Get-LinearGraphQLDocument -Name 'GetAttachment') -Variables @{ id = $target.Id } -IncludeErrors
+                $current = ConvertTo-LinearAttachment -InputObject (Get-LinearNestedValue -InputObject $lookup.Data -Name 'attachment')
+                if ($null -eq $current) {
+                    $message = Format-LinearFailureMessage -Message "Attachment '$($target.Id)' was not found." -Errors $lookup.Errors
+                    $PSCmdlet.WriteError((New-LinearErrorRecord -Message $message -ErrorId 'PSLinear.AttachmentNotFound' -Category ObjectNotFound -TargetObject $target.Id))
+                    continue
                 }
             }
+            $newTitle = if ($Title) { $Title } elseif ($null -ne $current) { $current.Title } else { $target.Title }
 
             $attachmentInput = @{ title = $newTitle }
             if ($PSBoundParameters.ContainsKey('Subtitle')) {
                 $attachmentInput['subtitle'] = if ($Subtitle) { $Subtitle } else { $null }
             }
             if ($null -ne $metadataInput) { $attachmentInput['metadata'] = $metadataInput }
+            if ($mergeMetadata) {
+                $merged = $current.Metadata
+                foreach ($name in $RemoveMetadata) { $merged.Remove($name) }
+                foreach ($key in $addMetadataInput.Keys) { $merged[$key] = $addMetadataInput[$key] }
+                $attachmentInput['metadata'] = $merged
+            }
             $result = Invoke-LinearRequest -Query (Get-LinearGraphQLDocument -Name 'UpdateAttachment') `
                 -Variables @{ id = $target.Id; input = $attachmentInput } -IncludeErrors
             $updated = Get-LinearNestedValue -InputObject $result.Data -Name 'attachmentUpdate.attachment'

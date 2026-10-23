@@ -278,6 +278,35 @@ Describe 'Get-LinearIssue' {
             }
         }
 
+        It 'filters by attachment URL: <Url>' -ForEach @(
+            @{ Url = 'https://monitor.example/alerts/1'; Comparator = 'eq'; Value = 'https://monitor.example/alerts/1' }
+            @{ Url = 'https://monitor.example/alerts/*'; Comparator = 'startsWith'; Value = 'https://monitor.example/alerts/' }
+            @{ Url = '*/alerts/1'; Comparator = 'endsWith'; Value = '/alerts/1' }
+            @{ Url = '*monitor.example*'; Comparator = 'contains'; Value = 'monitor.example' }
+            @{ Url = 'https://monitor.example/alerts?id=[1]'; Comparator = 'eq'; Value = 'https://monitor.example/alerts?id=[1]' }
+        ) {
+            Get-LinearIssue -AttachmentUrl $Url | Out-Null
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                $conditions = @(Get-RequestVariable $Body 'filter.attachments.some.or')
+                $conditions.Count -eq 1 -and @($conditions[0]['url'].Keys) -ceq $Comparator -and $conditions[0]['url'][$Comparator] -ceq $Value
+            }
+        }
+
+        It 'matches any of several attachment URLs' {
+            Get-LinearIssue -AttachmentUrl 'https://a.example/*', 'https://b.example/*' -StateType Completed | Out-Null
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                $conditions = @(Get-RequestVariable $Body 'filter.attachments.some.or')
+                $conditions.Count -eq 2 -and $conditions[1]['url']['startsWith'] -eq 'https://b.example/' -and
+                (Get-RequestVariable $Body 'filter.state.type.in') -contains 'completed'
+            }
+        }
+
+        It 'refuses a * in the middle of an attachment URL, before sending anything' {
+            { Get-LinearIssue -AttachmentUrl 'https://*.example/alerts' } |
+                Should -Throw -ErrorId 'PSLinear.InvalidFilter*' -ExpectedMessage '*Use * only at the start or the end*'
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
+        }
+
         It 'lists issues for each team piped in' {
             $teams = @(
                 [pscustomobject]@{ PSTypeName = 'PSLinear.Team'; Id = 'team-eng'; Key = 'ENG'; Name = 'Engineering' }
@@ -288,6 +317,59 @@ Describe 'Get-LinearIssue' {
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
                 (Get-RequestBody $Body).variables.filter.team.id.eq -eq 'team-ops'
             }
+        }
+    }
+
+    Context 'With attachments' {
+        BeforeEach {
+            # ENG-1 has one attachment. ENG-2 has more than the list returns: b1 in the list, b1 and b2 in ListIssueAttachments.
+            Mock -ModuleName PSLinear Send-LinearHttpRequest {
+                $request = Get-RequestBody -Body $Body
+                if ($request.query -match 'query ListIssuesWithAttachments') {
+                    $first = New-LinearTestIssueNode -Identifier 'ENG-1' -Title 'First'
+                    $first['attachments'] = New-LinearTestConnection -Nodes @(
+                        New-LinearTestAttachmentNode -Id 'a1' -Title 'Alert 1' -Url 'https://monitor.example/alerts/1' -Issue 'ENG-1' -Metadata ([ordered]@{ alertId = 1; managed = $true })
+                    )
+                    $second = New-LinearTestIssueNode -Identifier 'ENG-2' -Title 'Second'
+                    $second['attachments'] = New-LinearTestConnection -Nodes @(New-LinearTestAttachmentNode -Id 'b1' -Issue 'ENG-2') -HasNextPage $true -EndCursor 'b1'
+                    return New-LinearTestResponse -Data @{ issues = New-LinearTestConnection -Nodes @($first, $second) }
+                }
+                if ($request.query -match 'query ListIssueAttachments') {
+                    return New-LinearTestResponse -Data @{
+                        issue = @{
+                            attachments = New-LinearTestConnection -Nodes @(
+                                (New-LinearTestAttachmentNode -Id 'b1' -Issue 'ENG-2'),
+                                (New-LinearTestAttachmentNode -Id 'b2' -Url 'https://monitor.example/alerts/2' -Issue 'ENG-2')
+                            )
+                        }
+                    }
+                }
+                New-LinearTestResponse -Data @{ issues = New-LinearTestConnection -Nodes @(New-LinearTestIssueNode -Identifier 'ENG-1') }
+            }
+        }
+
+        It 'adds the attachments and their metadata to each issue, in the same request' {
+            $issues = @(Get-LinearIssue -AttachmentUrl 'https://monitor.example/*' -IncludeAttachment)
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter { (Get-RequestOperation $Body) -eq 'ListIssuesWithAttachments' }
+            $issues[0].Attachments.Count | Should -Be 1
+            $issues[0].Attachments[0].PSObject.TypeNames | Should -Contain 'PSLinear.Attachment'
+            $issues[0].Attachments[0].Url | Should -Be 'https://monitor.example/alerts/1'
+            $issues[0].Attachments[0].Metadata.managed | Should -BeTrue
+            $issues[0].Attachments[0].Issue | Should -Be 'ENG-1'
+        }
+
+        It 'reads all attachments of an issue that has more than the list returns' {
+            $issues = @(Get-LinearIssue -IncludeAttachment)
+            $issues[1].Attachments.Id | Should -Be @('b1', 'b2')
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                (Get-RequestOperation $Body) -eq 'ListIssueAttachments' -and (Get-RequestVariable $Body 'id') -eq $issues[1].Id
+            }
+        }
+
+        It 'leaves the Attachments property out without -IncludeAttachment' {
+            $issue = Get-LinearIssue | Select-Object -First 1
+            $issue.PSObject.Properties['Attachments'] | Should -BeNullOrEmpty
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter { (Get-RequestOperation $Body) -eq 'ListIssues' }
         }
     }
 }

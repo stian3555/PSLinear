@@ -6,6 +6,47 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `Connect-Linear -ClientCredential` signs in as an OAuth application with the client
+  credentials grant, for automation that runs without a person: issues and comments are
+  created by the application instead of the owner of an API key. The client id and secret are
+  given as a PSCredential and the secret is kept as a SecureString. PSLinear requests a new
+  token with the same `-Scope` before the 30-day token expires, and once more when Linear
+  rejects it. Token requests are retried after network and server errors.
+- `Add-LinearAttachment -Url -NoRichLink` creates a link attachment with exactly the title,
+  subtitle and metadata given, in one request and without integrations. Linear identifies the
+  attachment by its URL, so running the same command again updates the attachment instead of
+  adding another one. An update sets the title, and the subtitle and metadata when they are
+  given (`-Metadata` replaces all of the metadata).
+- `Add-LinearAttachment -Url` takes `-Subtitle`.
+- `Set-LinearAttachment -AddMetadata` and `-RemoveMetadata` change some metadata values and keep
+  the others, including what integrations store.
+- `Get-LinearIssue -AttachmentUrl` finds issues by the URLs of their attachments: a whole URL,
+  or a pattern with `*` at the start or end, such as `'https://monitor.example/alerts/*'`.
+- `Get-LinearIssue -IncludeAttachment` adds each issue's attachments, with their metadata, as an
+  `Attachments` property, read in the same requests as the issues instead of one request per
+  issue. An issue with more than 10 attachments costs one extra request, so none are left out.
+
+### Changed
+
+- Attachment metadata can hold boolean values as well as strings and numbers.
+- Mutations are no longer sent again after a server error (HTTP 5xx) or after a connection that
+  failed during the request, because Linear may already have made the change and a second
+  attempt could create a second issue or comment. They stop with
+  `PSLinear.MutationOutcomeUnknown` instead, so automation can check the result before it
+  retries. Mutations are still retried when they never reached Linear (the host name did not
+  resolve or the connection could not be made) and when Linear refused them because of the
+  rate limit. Queries are retried as before, and so are the mutations that are safe to repeat:
+  requesting an upload URL, and `Add-LinearAttachment -NoRichLink`.
+- A server error (HTTP 5xx) always stops the command, also where a missing item is reported as
+  a non-terminating error, so it can no longer be mistaken for an item that does not exist.
+
+### Fixed
+
+- `Invoke-LinearGraphQL` recognizes a mutation that comes after a fragment definition, so
+  `-WhatIf` and `-Confirm` apply to it.
+
 ## [0.2.0] - 2026-10-18
 
 ### Added

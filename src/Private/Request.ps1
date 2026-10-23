@@ -93,12 +93,21 @@ function Invoke-LinearRequest {
         Handles authentication, GraphQL errors (which may arrive with HTTP 200),
         rate limiting (HTTP 400 with code RATELIMITED), server errors and transient
         network failures, retrying with exponential backoff.
+
+        Queries are retried after any of these. A mutation is retried only when Linear rejected
+        it because of the rate limit, or when it never reached Linear (see
+        Test-LinearRequestNotSent): after a server error or a connection that failed later,
+        Linear may already have made the change, so sending it again could make it twice. Those
+        failures throw PSLinear.MutationOutcomeUnknown instead.
+    .PARAMETER Idempotent
+        The mutation can be sent again without harm, for example because it only signs an upload
+        URL or updates a record by its key, so it is retried like a query.
     .PARAMETER IncludeErrors
         Return [pscustomobject]@{ Data; Errors } instead of throwing on GraphQL errors.
-        Authentication, rate-limit, HTTP and network failures still throw. Callers use this
-        for expected errors (such as 'not found') so the error is written only once:
-        PowerShell records a caught terminating error from a nested command in the
-        caller's -ErrorVariable as well.
+        Authentication, rate-limit, server (HTTP 5xx), other HTTP and network failures still
+        throw. Callers use this for expected errors (such as 'not found') so the error is
+        written only once: PowerShell records a caught terminating error from a nested command
+        in the caller's -ErrorVariable as well.
     #>
     [CmdletBinding()]
     param(
@@ -108,6 +117,8 @@ function Invoke-LinearRequest {
         [System.Collections.IDictionary] $Variables,
 
         [string] $OperationName,
+
+        [switch] $Idempotent,
 
         [switch] $IncludeErrors
     )
@@ -133,6 +144,12 @@ function Invoke-LinearRequest {
         'User-Agent'  = $script:UserAgent
     }
 
+    $operation = Get-LinearOperation -Document $Query -OperationName $OperationName
+    # Sending a mutation again after an unclear failure could make the change twice.
+    $mayDuplicate = $operation.Type -eq 'mutation' -and -not $Idempotent
+    $mutationName = if ($operation.Name) { "mutation $($operation.Name)" } else { 'the mutation' }
+    $outcomeAdvice = 'Linear may or may not have made the change, so it was not sent again. Check the result in Linear before you retry.'
+
     $maxRetries = $context.MaxRetries
     $attempt = 0
     $renewed = $false
@@ -143,6 +160,13 @@ function Invoke-LinearRequest {
             $response = Send-LinearHttpRequest -Uri $context.Endpoint -Headers $headers -Body $body
         }
         catch {
+            if ($mayDuplicate -and -not (Test-LinearRequestNotSent -Exception $_.Exception)) {
+                $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord `
+                            -Message "The connection to Linear failed during $mutationName ($($_.Exception.Message)). $outcomeAdvice" `
+                            -ErrorId 'PSLinear.MutationOutcomeUnknown' `
+                            -Category ConnectionError `
+                            -TargetObject $context.Endpoint))
+            }
             if ($attempt -le $maxRetries) {
                 $delay = Get-LinearRetryDelay -Attempt $attempt
                 Write-Verbose "Request to Linear failed ($($_.Exception.Message)). Retrying in $delay ms (retry $attempt of $maxRetries)."
@@ -159,7 +183,8 @@ function Invoke-LinearRequest {
         Save-LinearRateLimitState -Headers $response.Headers
         $errors = @(Get-LinearResponseError -Content $response.Content)
         $isRateLimited = ($response.StatusCode -eq 429) -or (@($errors | Where-Object Code -EQ 'RATELIMITED').Count -gt 0)
-        $isTransient = $isRateLimited -or ($response.StatusCode -ge 500)
+        # A rate-limited request was refused before Linear ran it, so even a mutation can be sent again.
+        $isTransient = $isRateLimited -or ($response.StatusCode -ge 500 -and -not $mayDuplicate)
 
         if ($isTransient -and $attempt -le $maxRetries) {
             $delay = Get-LinearRetryDelay -Attempt $attempt -Headers $response.Headers
@@ -176,7 +201,7 @@ function Invoke-LinearRequest {
         }
 
         $isAuthError = ($response.StatusCode -eq 401) -or (@($errors | Where-Object Code -EQ 'AUTHENTICATION_ERROR').Count -gt 0)
-        if ($isAuthError -and -not $renewed -and $context.AuthScheme -eq 'OAuth' -and $null -ne $context.RefreshToken) {
+        if ($isAuthError -and -not $renewed -and (Test-LinearTokenRenewable -Context $context)) {
             # The access token may have been revoked or expired early: renew it once and retry.
             $renewed = $true
             try {
@@ -200,8 +225,15 @@ function Invoke-LinearRequest {
             $data = Get-LinearNestedValue -InputObject $response.Content -Name 'data'
         }
 
+        if ($response.StatusCode -ge 500 -and $mayDuplicate) {
+            $message = Format-LinearFailureMessage -Message "Linear returned HTTP $($response.StatusCode) for $mutationName." -Errors $errors
+            $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message "$message $outcomeAdvice" `
+                        -ErrorId 'PSLinear.MutationOutcomeUnknown' -Category InvalidResult -StatusCode $response.StatusCode -TargetObject $response.Content))
+        }
+
         if ($errors.Count -gt 0) {
-            if ($IncludeErrors) {
+            # A server error is never an expected per-item failure, so it is not returned with -IncludeErrors.
+            if ($IncludeErrors -and $response.StatusCode -lt 500) {
                 return [pscustomobject]@{ Data = $data; Errors = $errors }
             }
             $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message (Format-LinearErrorMessage -Errors $errors) `
@@ -317,6 +349,102 @@ function Get-LinearRetryDelay {
 
     $base = [math]::Min(30000, 1000 * [math]::Pow(2, $Attempt - 1))
     [int]($base + (Get-Random -Minimum 0 -Maximum 250))
+}
+
+function Get-LinearOperation {
+    <#
+    .SYNOPSIS
+        Returns the type (query, mutation or subscription) and name of the operation a GraphQL
+        document runs, as [pscustomobject]@{ Type; Name }.
+    .DESCRIPTION
+        Reads only the top level of the document, after removing strings and comments, so a field
+        named 'mutation' or a fragment cannot be mistaken for an operation. With -OperationName,
+        returns that operation, otherwise the only one. When that is unclear (several operations,
+        or a name that is not defined), the document counts as a mutation if it defines one, so
+        a write is never retried or run under -WhatIf by mistake.
+    #>
+    [CmdletBinding()]
+    [OutputType([pscustomobject])]
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyString()]
+        [string] $Document,
+
+        [string] $OperationName
+    )
+
+    $text = [regex]::Replace($Document, '"""[\s\S]*?"""|"(?:\\.|[^"\\\r\n])*"|#[^\r\n]*', ' ')
+    $operations = [System.Collections.Generic.List[object]]::new()
+    $pending = $null
+    $depth = 0
+    foreach ($match in [regex]::Matches($text, '[{}()]|@?[_A-Za-z][_0-9A-Za-z]*')) {
+        $token = $match.Value
+        if ($token -eq '{' -or $token -eq '(') {
+            # A selection set at the top level starts the body of an operation or a fragment.
+            if ($depth -eq 0 -and $token -eq '{') {
+                if ($null -eq $pending) {
+                    $operations.Add([pscustomobject]@{ Type = 'query'; Name = $null })
+                }
+                elseif ($pending.Type -ne 'fragment') {
+                    $operations.Add($pending)
+                }
+                $pending = $null
+            }
+            $depth++
+        }
+        elseif ($token -eq '}' -or $token -eq ')') {
+            if ($depth -gt 0) { $depth-- }
+        }
+        elseif ($depth -eq 0 -and -not $token.StartsWith('@')) {
+            if ($null -eq $pending) {
+                if ($token -cin 'query', 'mutation', 'subscription', 'fragment') {
+                    $pending = [pscustomobject]@{ Type = $token; Name = $null }
+                }
+            }
+            elseif ($null -eq $pending.Name) {
+                $pending.Name = $token
+            }
+        }
+    }
+
+    $selected = if ($OperationName) {
+        $operations | Where-Object { $null -ne $_ -and $_.Name -ceq $OperationName } | Select-Object -First 1
+    }
+    elseif ($operations.Count -eq 1) {
+        $operations[0]
+    }
+    if ($null -ne $selected) { return $selected }
+
+    $hasMutation = @($operations | Where-Object { $null -ne $_ -and $_.Type -eq 'mutation' }).Count -gt 0
+    [pscustomobject]@{
+        Type = if ($hasMutation) { 'mutation' } else { 'query' }
+        Name = if ($OperationName) { $OperationName } else { $null }
+    }
+}
+
+function Test-LinearRequestNotSent {
+    <#
+    .SYNOPSIS
+        Returns whether a failed HTTP request certainly never reached Linear: the host name did not
+        resolve, or the connection, its TLS handshake or the proxy tunnel could not be set up.
+    .NOTES
+        Any other failure, such as a connection that broke during the request, may come after
+        Linear received the request, so a mutation that failed that way may still have been made.
+    #>
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param(
+        [AllowNull()]
+        [System.Exception] $Exception
+    )
+
+    $notSentErrors = [System.Net.Http.HttpRequestError[]]@('NameResolutionError', 'ConnectionError', 'SecureConnectionError', 'ProxyTunnelError')
+    $notSentSocketErrors = [System.Net.Sockets.SocketError[]]@('HostNotFound', 'TryAgain', 'NoData', 'ConnectionRefused', 'NetworkUnreachable', 'HostUnreachable', 'NetworkDown')
+    for ($current = $Exception; $null -ne $current; $current = $current.InnerException) {
+        if ($current -is [System.Net.Http.HttpRequestException] -and $current.HttpRequestError -in $notSentErrors) { return $true }
+        if ($current -is [System.Net.Sockets.SocketException] -and $current.SocketErrorCode -in $notSentSocketErrors) { return $true }
+    }
+    $false
 }
 
 function Save-LinearRateLimitState {

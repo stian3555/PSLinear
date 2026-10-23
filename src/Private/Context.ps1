@@ -29,7 +29,13 @@ function New-LinearContext {
 
         [string] $SecretName,
 
-        [string] $Vault
+        [string] $Vault,
+
+        # Sign-ins with the client credentials grant: the client secret and the scopes, so a new
+        # token can be requested with the same scopes (Linear revokes app tokens with other scopes).
+        [securestring] $ClientSecret,
+
+        [string[]] $Scope
     )
 
     [pscustomobject]@{
@@ -46,8 +52,10 @@ function New-LinearContext {
         ClientId     = $(if ($ClientId) { $ClientId } else { $null })
         SecretName   = $(if ($SecretName) { $SecretName } else { $null })
         Vault        = $(if ($Vault) { $Vault } else { $null })
+        Scope        = $(if ($Scope) { $Scope } else { $null })
         Token        = $Token
         RefreshToken = $RefreshToken
+        ClientSecret = $ClientSecret
     }
 }
 

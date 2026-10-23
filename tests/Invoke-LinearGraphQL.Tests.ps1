@@ -44,6 +44,19 @@ Describe 'Invoke-LinearGraphQL' {
         Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
     }
 
+    It 'detects a mutation that comes after a fragment' {
+        $mutation = "fragment Fields on Issue { id title }`nmutation Rename { issueUpdate(id: `"ENG-1`", input: { title: `"x`" }) { issue { ...Fields } } }"
+        Invoke-LinearGraphQL -Query $mutation -WhatIf
+        Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
+    }
+
+    It 'does not send a mutation again after a server error' {
+        Mock -ModuleName PSLinear Send-LinearHttpRequest { [pscustomobject]@{ StatusCode = 500; Headers = @{}; Content = 'Boom' } }
+        { Invoke-LinearGraphQL -Query 'mutation Rename { issueUpdate(id: "ENG-1", input: { title: "x" }) { success } }' -Confirm:$false } |
+            Should -Throw -ErrorId 'PSLinear.MutationOutcomeUnknown*'
+        Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly
+    }
+
     It 'runs queries even with -WhatIf, because they change nothing' {
         Invoke-LinearGraphQL -Query '{ viewer { id } }' -WhatIf | Out-Null
         Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly
