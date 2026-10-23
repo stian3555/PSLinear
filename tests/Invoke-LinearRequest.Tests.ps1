@@ -192,22 +192,45 @@ Describe 'Invoke-LinearRequest' {
 
     Context 'Mutations' {
         BeforeAll {
-            $script:mutation = 'mutation CreateIssue($input: IssueCreateInput!) { issueCreate(input: $input) { success } }'
+            function Invoke-TestMutation {
+                # Sends a CreateIssue mutation through Invoke-LinearRequest.
+                param([switch] $Idempotent, [switch] $IncludeErrors)
+                $parameters = @{
+                    Query         = 'mutation CreateIssue($input: IssueCreateInput!) { issueCreate(input: $input) { success } }'
+                    Idempotent    = $Idempotent
+                    IncludeErrors = $IncludeErrors
+                }
+                InModuleScope PSLinear -Parameters $parameters {
+                    param($Query, $Idempotent, $IncludeErrors)
+                    Invoke-LinearRequest -Query $Query -Idempotent:$Idempotent -IncludeErrors:$IncludeErrors
+                }
+            }
         }
 
         It 'does not send a mutation again after a server error, and says the outcome is unknown' {
             Mock -ModuleName PSLinear Send-LinearHttpRequest { [pscustomobject]@{ StatusCode = 503; Headers = @{}; Content = 'Unavailable' } }
-            { InModuleScope PSLinear -Parameters @{ Query = $script:mutation } { param($Query) Invoke-LinearRequest -Query $Query -IncludeErrors } } |
+            { Invoke-TestMutation -IncludeErrors } |
                 Should -Throw -ExpectedMessage '*HTTP 503 for mutation CreateIssue*may or may not have made the change*' -ErrorId 'PSLinear.MutationOutcomeUnknown*'
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly
             Should -Invoke Start-Sleep -ModuleName PSLinear -Times 0 -Exactly
+        }
+
+        It 'sends a mutation marked -Idempotent again after a server error' {
+            $script:attempts = 0
+            Mock -ModuleName PSLinear Send-LinearHttpRequest {
+                $script:attempts++
+                if ($script:attempts -eq 1) { return [pscustomobject]@{ StatusCode = 503; Headers = @{}; Content = 'Unavailable' } }
+                New-LinearTestResponse -Data @{ issueCreate = @{ success = $true } }
+            }
+            (Invoke-TestMutation -Idempotent).issueCreate.success | Should -BeTrue
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 2 -Exactly
         }
 
         It 'does not send a mutation again when the connection fails after it was sent' {
             Mock -ModuleName PSLinear Send-LinearHttpRequest {
                 throw [System.Net.Http.HttpRequestException]::new('The response ended prematurely.', [System.IO.IOException]::new('Connection reset by peer'))
             }
-            { InModuleScope PSLinear -Parameters @{ Query = $script:mutation } { param($Query) Invoke-LinearRequest -Query $Query } } |
+            { Invoke-TestMutation } |
                 Should -Throw -ExpectedMessage '*during mutation CreateIssue (The response ended prematurely.)*' -ErrorId 'PSLinear.MutationOutcomeUnknown*'
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly
         }
@@ -223,15 +246,13 @@ Describe 'Invoke-LinearRequest' {
                 }
                 New-LinearTestResponse -Data @{ issueCreate = @{ success = $true } }
             }
-            $data = InModuleScope PSLinear -Parameters @{ Query = $script:mutation } { param($Query) Invoke-LinearRequest -Query $Query }
-            $data.issueCreate.success | Should -BeTrue
+            (Invoke-TestMutation).issueCreate.success | Should -BeTrue
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 3 -Exactly
         }
 
         It 'reports a connection error when a mutation never reached Linear after every retry' {
             Mock -ModuleName PSLinear Send-LinearHttpRequest { throw [System.Net.Http.HttpRequestException]::new([System.Net.Http.HttpRequestError]::NameResolutionError, 'No such host') }
-            { InModuleScope PSLinear -Parameters @{ Query = $script:mutation } { param($Query) Invoke-LinearRequest -Query $Query } } |
-                Should -Throw -ErrorId 'PSLinear.ConnectionFailed*'
+            { Invoke-TestMutation } | Should -Throw -ErrorId 'PSLinear.ConnectionFailed*'
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 4 -Exactly
         }
 
@@ -244,13 +265,12 @@ Describe 'Invoke-LinearRequest' {
                 }
                 New-LinearTestResponse -Data @{ issueCreate = @{ success = $true } }
             }
-            $data = InModuleScope PSLinear -Parameters @{ Query = $script:mutation } { param($Query) Invoke-LinearRequest -Query $Query }
-            $data.issueCreate.success | Should -BeTrue
+            (Invoke-TestMutation).issueCreate.success | Should -BeTrue
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 2 -Exactly
             Should -Invoke Start-Sleep -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter { $Milliseconds -eq 2000 }
         }
 
-        It 'still retries the queries of a document that also defines a mutation, when the query is the one that runs' {
+        It 'retries a query from a document that also defines a mutation' {
             $script:attempts = 0
             Mock -ModuleName PSLinear Send-LinearHttpRequest {
                 $script:attempts++

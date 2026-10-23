@@ -99,6 +99,9 @@ function Invoke-LinearRequest {
         Test-LinearRequestNotSent): after a server error or a connection that failed later,
         Linear may already have made the change, so sending it again could make it twice. Those
         failures throw PSLinear.MutationOutcomeUnknown instead.
+    .PARAMETER Idempotent
+        The mutation can be sent again without harm, for example because it only signs an upload
+        URL or updates a record by its key, so it is retried like a query.
     .PARAMETER IncludeErrors
         Return [pscustomobject]@{ Data; Errors } instead of throwing on GraphQL errors.
         Authentication, rate-limit, server (HTTP 5xx), other HTTP and network failures still
@@ -114,6 +117,8 @@ function Invoke-LinearRequest {
         [System.Collections.IDictionary] $Variables,
 
         [string] $OperationName,
+
+        [switch] $Idempotent,
 
         [switch] $IncludeErrors
     )
@@ -140,7 +145,8 @@ function Invoke-LinearRequest {
     }
 
     $operation = Get-LinearOperation -Document $Query -OperationName $OperationName
-    $isMutation = $operation.Type -eq 'mutation'
+    # Sending a mutation again after an unclear failure could make the change twice.
+    $mayDuplicate = $operation.Type -eq 'mutation' -and -not $Idempotent
     $mutationName = if ($operation.Name) { "mutation $($operation.Name)" } else { 'the mutation' }
     $outcomeAdvice = 'Linear may or may not have made the change, so it was not sent again. Check the result in Linear before you retry.'
 
@@ -154,7 +160,7 @@ function Invoke-LinearRequest {
             $response = Send-LinearHttpRequest -Uri $context.Endpoint -Headers $headers -Body $body
         }
         catch {
-            if ($isMutation -and -not (Test-LinearRequestNotSent -Exception $_.Exception)) {
+            if ($mayDuplicate -and -not (Test-LinearRequestNotSent -Exception $_.Exception)) {
                 $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord `
                             -Message "The connection to Linear failed during $mutationName ($($_.Exception.Message)). $outcomeAdvice" `
                             -ErrorId 'PSLinear.MutationOutcomeUnknown' `
@@ -178,7 +184,7 @@ function Invoke-LinearRequest {
         $errors = @(Get-LinearResponseError -Content $response.Content)
         $isRateLimited = ($response.StatusCode -eq 429) -or (@($errors | Where-Object Code -EQ 'RATELIMITED').Count -gt 0)
         # A rate-limited request was refused before Linear ran it, so even a mutation can be sent again.
-        $isTransient = $isRateLimited -or ($response.StatusCode -ge 500 -and -not $isMutation)
+        $isTransient = $isRateLimited -or ($response.StatusCode -ge 500 -and -not $mayDuplicate)
 
         if ($isTransient -and $attempt -le $maxRetries) {
             $delay = Get-LinearRetryDelay -Attempt $attempt -Headers $response.Headers
@@ -219,23 +225,15 @@ function Invoke-LinearRequest {
             $data = Get-LinearNestedValue -InputObject $response.Content -Name 'data'
         }
 
-        # A server error is never an expected per-item failure, so it is not returned with -IncludeErrors.
-        if ($response.StatusCode -ge 500) {
-            $detail = if ($errors.Count -gt 0) { " $(Format-LinearErrorMessage -Errors $errors)" } else { '' }
-            if ($isMutation) {
-                $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message "Linear returned HTTP $($response.StatusCode) for $mutationName.$detail $outcomeAdvice" `
-                            -ErrorId 'PSLinear.MutationOutcomeUnknown' -Category InvalidResult -StatusCode $response.StatusCode -TargetObject $response.Content))
-            }
-            if ($errors.Count -gt 0) {
-                $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message (Format-LinearErrorMessage -Errors $errors) `
-                            -ErrorId 'PSLinear.GraphQLError' -Code $errors[0].Code -StatusCode $response.StatusCode -TargetObject $errors))
-            }
-            $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message "Linear API returned HTTP $($response.StatusCode)." `
-                        -ErrorId 'PSLinear.HttpError' -StatusCode $response.StatusCode -TargetObject $response.Content))
+        if ($response.StatusCode -ge 500 -and $mayDuplicate) {
+            $message = Format-LinearFailureMessage -Message "Linear returned HTTP $($response.StatusCode) for $mutationName." -Errors $errors
+            $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message "$message $outcomeAdvice" `
+                        -ErrorId 'PSLinear.MutationOutcomeUnknown' -Category InvalidResult -StatusCode $response.StatusCode -TargetObject $response.Content))
         }
 
         if ($errors.Count -gt 0) {
-            if ($IncludeErrors) {
+            # A server error is never an expected per-item failure, so it is not returned with -IncludeErrors.
+            if ($IncludeErrors -and $response.StatusCode -lt 500) {
                 return [pscustomobject]@{ Data = $data; Errors = $errors }
             }
             $PSCmdlet.ThrowTerminatingError((New-LinearErrorRecord -Message (Format-LinearErrorMessage -Errors $errors) `
@@ -262,9 +260,6 @@ function Invoke-LinearPagedRequest {
         Dot-separated path from 'data' to the connection, for example 'issues' or 'team.issues'.
     .PARAMETER Limit
         Maximum number of nodes to return. Use 0 for no limit.
-    .PARAMETER PageSize
-        Maximum number of nodes per request, at most $script:MaxPageSize. Use a smaller page for a
-        query with nested connections, to stay within Linear's complexity limit.
     .PARAMETER IncludeErrors
         Collect every page and return [pscustomobject]@{ Nodes; Errors } instead of streaming the
         nodes and throwing on GraphQL errors. Paging stops at the first page with errors. Like
@@ -284,13 +279,9 @@ function Invoke-LinearPagedRequest {
         [ValidateRange(0, [int]::MaxValue)]
         [int] $Limit = $script:DefaultPageSize,
 
-        [ValidateRange(1, [int]::MaxValue)]
-        [int] $PageSize = $script:MaxPageSize,
-
         [switch] $IncludeErrors
     )
 
-    $PageSize = [math]::Min($PageSize, $script:MaxPageSize)
     $pageVariables = @{}
     foreach ($key in $Variables.Keys) { $pageVariables[$key] = $Variables[$key] }
     $collected = [System.Collections.Generic.List[object]]::new()
@@ -300,7 +291,7 @@ function Invoke-LinearPagedRequest {
     $page = 0
     do {
         $page++
-        $pageVariables['first'] = [math]::Min($PageSize, $remaining)
+        $pageVariables['first'] = [math]::Min($script:MaxPageSize, $remaining)
         $pageVariables['after'] = $after
         Write-Verbose "Fetching page $page ($($pageVariables['first']) items)."
 

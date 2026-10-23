@@ -307,8 +307,8 @@ and let the job find its issues by the attachments it owns:
 $ErrorActionPreference = 'Stop'
 $alertUrl = 'https://monitor.example/alerts/42'
 
-# Look at every state, and at archived issues too, since Linear can archive closed issues automatically
-$issue = Get-LinearIssue -Team OPS -AttachmentUrl $alertUrl -IncludeArchived -IncludeAttachment -All | Select-Object -First 1
+# Include archived issues: Linear can archive closed issues automatically
+$issue = Get-LinearIssue -Team OPS -AttachmentUrl $alertUrl -IncludeArchived -First 1
 if (-not $issue) {
     $issue = New-LinearIssue -Team OPS -Title 'Disk almost full on web-1' -State Todo
 }
@@ -367,7 +367,7 @@ Run `Get-Help <command> -Full` for every parameter and more examples.
 
 | Command | Description |
 | --- | --- |
-| `Get-LinearIssue` | Issues by identifier or URL, the issue of the current git branch (`-Current`), or filtered lists with paging, also by attachment URL and with the attachments included. |
+| `Get-LinearIssue` | Issues by identifier or URL, the issue of the current git branch (`-Current`), or filtered lists with paging, also by attachment URL and optionally with their attachments. |
 | `New-LinearIssue` | Create an issue, with states, labels, projects, milestones, cycles, users and templates given by name. |
 | `Set-LinearIssue` | Change issues: state, assignee, labels (replace, add or remove), priority and more, or clear values with `-Clear`. |
 | `Start-LinearIssue` | Start an issue: assign it to you, move it to a started state and check out its git branch. |
@@ -461,11 +461,9 @@ Run `Get-Help <command> -Full` for every parameter and more examples.
   are sent in the `Authorization` header as-is; OAuth tokens use `Bearer`, and tokens from a
   browser sign-in or client credentials are renewed shortly before they expire (or once, when
   Linear rejects one).
-- **Rate limits and retries.** Linear limits requests and query complexity per hour, per user.
-  PSLinear retries rate-limited calls, server errors and network failures with exponential
-  backoff (3 times by default, set with `Connect-Linear -MaxRetries`). Mutations are retried
-  only when Linear refused them or they never reached it, so a change is never made twice.
-  `Get-LinearRateLimit` shows the remaining budget.
+- **Rate limits.** Linear limits requests and query complexity per hour, per user. PSLinear
+  retries rate-limited calls with exponential backoff (3 times by default, set with
+  `Connect-Linear -MaxRetries`). `Get-LinearRateLimit` shows the remaining budget.
 - **Complexity.** Linear rejects any single query above 10,000 complexity points. Pages are
   capped at 100 items, and nested lists are kept small, so every query stays well below that.
 - **Name lookups.** Team, workflow state, label, user, project, project status, project label,
@@ -475,9 +473,8 @@ Run `Get-Help <command> -Full` for every parameter and more examples.
   found triggers one refresh.
 - **Errors.** GraphQL errors are turned into PowerShell errors with the Linear error code in
   the message. A missing item, or a change Linear rejects, writes a non-terminating error, so
-  the rest of the pipeline continues. Server, network and authentication failures always stop
-  the command. Unknown names and invalid parameter combinations stop the command before
-  anything is sent. See [Errors you can rely on](#errors-you-can-rely-on).
+  the rest of the pipeline continues. Unknown names and invalid parameter combinations stop the
+  command before anything is sent. See [Errors you can rely on](#errors-you-can-rely-on).
 
 ## Development
 

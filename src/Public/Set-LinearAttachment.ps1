@@ -142,14 +142,14 @@ function Set-LinearAttachment {
             $current = $null
             if ($mergeMetadata -or (-not $Title -and -not $target.Title)) {
                 $lookup = Invoke-LinearRequest -Query (Get-LinearGraphQLDocument -Name 'GetAttachment') -Variables @{ id = $target.Id } -IncludeErrors
-                $current = Get-LinearNestedValue -InputObject $lookup.Data -Name 'attachment'
+                $current = ConvertTo-LinearAttachment -InputObject (Get-LinearNestedValue -InputObject $lookup.Data -Name 'attachment')
                 if ($null -eq $current) {
                     $message = Format-LinearFailureMessage -Message "Attachment '$($target.Id)' was not found." -Errors $lookup.Errors
                     $PSCmdlet.WriteError((New-LinearErrorRecord -Message $message -ErrorId 'PSLinear.AttachmentNotFound' -Category ObjectNotFound -TargetObject $target.Id))
                     continue
                 }
             }
-            $newTitle = if ($Title) { $Title } elseif ($null -ne $current) { Get-LinearNestedValue -InputObject $current -Name 'title' } else { $target.Title }
+            $newTitle = if ($Title) { $Title } elseif ($null -ne $current) { $current.Title } else { $target.Title }
 
             $attachmentInput = @{ title = $newTitle }
             if ($PSBoundParameters.ContainsKey('Subtitle')) {
@@ -157,12 +157,8 @@ function Set-LinearAttachment {
             }
             if ($null -ne $metadataInput) { $attachmentInput['metadata'] = $metadataInput }
             if ($mergeMetadata) {
-                $merged = [ordered]@{}
-                $currentMetadata = Get-LinearNestedValue -InputObject $current -Name 'metadata'
-                if ($null -ne $currentMetadata) {
-                    foreach ($property in $currentMetadata.PSObject.Properties) { $merged[$property.Name] = $property.Value }
-                }
-                foreach ($name in @($RemoveMetadata | Where-Object { $null -ne $_ })) { $merged.Remove($name) }
+                $merged = $current.Metadata
+                foreach ($name in $RemoveMetadata) { $merged.Remove($name) }
                 foreach ($key in $addMetadataInput.Keys) { $merged[$key] = $addMetadataInput[$key] }
                 $attachmentInput['metadata'] = $merged
             }

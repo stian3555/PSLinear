@@ -113,8 +113,8 @@ function ConvertTo-LinearUrlComparator {
     )
 
     $leading = $Url.StartsWith('*')
-    $trailing = $Url.Length -gt 1 -and $Url.EndsWith('*')
-    $text = $Url.Substring([int]$leading, $Url.Length - [int]$leading - [int]$trailing)
+    $trailing = $Url.EndsWith('*')
+    $text = $Url -replace '^\*|\*$'
     if ($text.Length -eq 0 -or $text.Contains('*')) {
         throw (New-LinearErrorRecord -Message "'$Url' is not a URL pattern. Use * only at the start or the end, for example 'https://monitor.example/alerts/*'." `
                 -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument -TargetObject $Url)
@@ -132,7 +132,7 @@ function Complete-LinearIssueAttachment {
     .DESCRIPTION
         The list query reads only the first attachments of each issue, to keep its complexity
         low. For an issue that has more, all of them are read with ListIssueAttachments, so
-        callers that look for an attachment never miss one.
+        callers that look for an attachment never miss one. Other nodes pass through unchanged.
     #>
     [CmdletBinding()]
     [OutputType([pscustomobject])]

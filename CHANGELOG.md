@@ -26,7 +26,7 @@ and this project follows [Semantic Versioning](https://semver.org/).
   or a pattern with `*` at the start or end, such as `'https://monitor.example/alerts/*'`.
 - `Get-LinearIssue -IncludeAttachment` adds each issue's attachments, with their metadata, as an
   `Attachments` property, read in the same requests as the issues instead of one request per
-  issue. An issue with more than 20 attachments costs one extra request, so none are left out.
+  issue. An issue with more than 10 attachments costs one extra request, so none are left out.
 
 ### Changed
 
@@ -37,7 +37,8 @@ and this project follows [Semantic Versioning](https://semver.org/).
   `PSLinear.MutationOutcomeUnknown` instead, so automation can check the result before it
   retries. Mutations are still retried when they never reached Linear (the host name did not
   resolve or the connection could not be made) and when Linear refused them because of the
-  rate limit. Queries are retried as before.
+  rate limit. Queries are retried as before, and so are the mutations that are safe to repeat:
+  requesting an upload URL, and `Add-LinearAttachment -NoRichLink`.
 - A server error (HTTP 5xx) always stops the command, also where a missing item is reported as
   a non-terminating error, so it can no longer be mistaken for an item that does not exist.
 

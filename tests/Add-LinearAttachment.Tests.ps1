@@ -167,6 +167,17 @@ Describe 'Add-LinearAttachment' {
             $linkErrors[0].Exception.Message | Should -BeLike '*Entity not found: Issue*'
         }
 
+        It 'sends the attachment again after a server error, because the same URL only updates it' {
+            $script:attempts = 0
+            Mock -ModuleName PSLinear Send-LinearHttpRequest {
+                $script:attempts++
+                if ($script:attempts -eq 1) { return [pscustomobject]@{ StatusCode = 502; Headers = @{}; Content = 'Bad gateway' } }
+                Get-LinearTestAttachmentResponse -Request (Get-RequestBody -Body $Body)
+            }
+            (Add-LinearAttachment ENG-1 -Url 'https://monitor.example/alerts/42' -NoRichLink).Url | Should -Be 'https://monitor.example/alerts/42'
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 2 -Exactly
+        }
+
         It 'sends nothing with -WhatIf' {
             Add-LinearAttachment ENG-1 -Url 'https://monitor.example/alerts/42' -NoRichLink -WhatIf
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
@@ -248,6 +259,20 @@ Describe 'Add-LinearAttachment' {
             (Add-LinearAttachment -Issue ENG-1 -Path (Join-Path $TestDrive 'files/spec.pdf')).Title | Should -Be 'spec.pdf'
             Should -Invoke Send-LinearFileUpload -ModuleName PSLinear -Times 2 -Exactly
             Should -Invoke Start-Sleep -ModuleName PSLinear -Times 1 -Exactly
+        }
+
+        It 'asks for the upload URL again after a server error' {
+            $script:attempts = 0
+            Mock -ModuleName PSLinear Send-LinearHttpRequest {
+                $request = Get-RequestBody -Body $Body
+                if ($request.query -match 'mutation RequestFileUpload') {
+                    $script:attempts++
+                    if ($script:attempts -eq 1) { return [pscustomobject]@{ StatusCode = 503; Headers = @{}; Content = 'Unavailable' } }
+                }
+                Get-LinearTestAttachmentResponse -Request $request
+            }
+            (Add-LinearAttachment -Issue ENG-1 -Path (Join-Path $TestDrive 'files/spec.pdf')).Title | Should -Be 'spec.pdf'
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 2 -Exactly -ParameterFilter { (Get-RequestOperation $Body) -eq 'RequestFileUpload' }
         }
 
         It 'stops with UploadFailed when the upload keeps failing' {

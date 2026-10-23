@@ -81,9 +81,8 @@ function Get-LinearIssue {
 
     .PARAMETER IncludeAttachment
         Adds each issue's attachments, with their metadata, as an Attachments property, read in
-        the same requests as the issues. Issues come 50 per request instead of 100 to stay within
-        Linear's query complexity limit, and an issue with more than 20 attachments takes one
-        extra request.
+        the same requests as the issues. An issue with more than 10 attachments takes one extra
+        request.
 
     .PARAMETER OrderBy
         UpdatedAt (default) or CreatedAt. Results are returned newest first.
@@ -399,15 +398,9 @@ function Get-LinearIssue {
         if ($issueFilter.Count -gt 0) { $variables['filter'] = $issueFilter }
 
         $limit = if ($All) { 0 } else { $First }
-        if ($IncludeAttachment) {
-            Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListIssuesWithAttachments') -ConnectionPath 'issues' -Variables $variables `
-                -Limit $limit -PageSize $script:IssueWithAttachmentsPageSize |
-                Complete-LinearIssueAttachment |
-                ConvertTo-LinearIssue
-        }
-        else {
-            Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListIssues') -ConnectionPath 'issues' -Variables $variables -Limit $limit |
-                ConvertTo-LinearIssue
-        }
+        $operationName = if ($IncludeAttachment) { 'ListIssuesWithAttachments' } else { 'ListIssues' }
+        Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name $operationName) -ConnectionPath 'issues' -Variables $variables -Limit $limit |
+            Complete-LinearIssueAttachment |
+            ConvertTo-LinearIssue
     }
 }

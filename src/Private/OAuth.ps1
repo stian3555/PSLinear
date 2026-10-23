@@ -392,8 +392,8 @@ function Save-LinearOAuthSecret {
 function Update-LinearOAuthToken {
     <#
     .SYNOPSIS
-        Gets a new access token with the context's refresh token, and saves the new refresh token,
-        or with the context's client credentials.
+        Gets a new access token with the context's refresh token or client credentials, and saves
+        the new refresh token.
     .NOTES
         Linear issues a new refresh token with every refresh, so the saved secret is updated too.
         Throws an ErrorRecord (PSLinear.TokenRefreshFailed) that asks the person to sign in again.
@@ -406,28 +406,27 @@ function Update-LinearOAuthToken {
         [object] $Context
     )
 
-    if ($null -ne $Context.ClientSecret) {
-        try {
-            $tokens = Request-LinearClientToken -ClientId $Context.ClientId -ClientSecret $Context.ClientSecret -Scope $Context.Scope -MaxRetries $Context.MaxRetries
+    $usesClientCredentials = $null -ne $Context.ClientSecret
+    try {
+        $tokens = if ($usesClientCredentials) {
+            Request-LinearClientToken -ClientId $Context.ClientId -ClientSecret $Context.ClientSecret -Scope $Context.Scope -MaxRetries $Context.MaxRetries
         }
-        catch {
-            throw (New-LinearErrorRecord -Message "Could not get a new Linear access token with the client credentials ($($_.Exception.Message)). Check the client secret, then run Connect-Linear -ClientCredential again." `
-                    -ErrorId 'PSLinear.TokenRefreshFailed' -Category AuthenticationError)
+        else {
+            Request-LinearOAuthToken -Form @{
+                grant_type    = 'refresh_token'
+                refresh_token = [System.Net.NetworkCredential]::new('', $Context.RefreshToken).Password
+                client_id     = $Context.ClientId
+            }
         }
     }
-    else {
-        $form = @{
-            grant_type    = 'refresh_token'
-            refresh_token = [System.Net.NetworkCredential]::new('', $Context.RefreshToken).Password
-            client_id     = $Context.ClientId
+    catch {
+        $message = if ($usesClientCredentials) {
+            "Could not get a new Linear access token with the client credentials ($($_.Exception.Message)). Check the client secret, then run Connect-Linear -ClientCredential again."
         }
-        try {
-            $tokens = Request-LinearOAuthToken -Form $form
+        else {
+            "The Linear sign-in has expired and could not be renewed ($($_.Exception.Message)). Run Connect-Linear -Browser again."
         }
-        catch {
-            throw (New-LinearErrorRecord -Message "The Linear sign-in has expired and could not be renewed ($($_.Exception.Message)). Run Connect-Linear -Browser again." `
-                    -ErrorId 'PSLinear.TokenRefreshFailed' -Category AuthenticationError)
-        }
+        throw (New-LinearErrorRecord -Message $message -ErrorId 'PSLinear.TokenRefreshFailed' -Category AuthenticationError)
     }
     $Context.Token = $tokens.AccessToken
     if ($null -ne $tokens.RefreshToken) { $Context.RefreshToken = $tokens.RefreshToken }

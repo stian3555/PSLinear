@@ -96,7 +96,7 @@ function Connect-Linear {
         How many times to retry a request that was rate limited or failed with a server or
         network error. Defaults to 3. A mutation is only retried when Linear refused it because
         of the rate limit or it never reached Linear, so a change is never made twice. With
-        -ClientCredential, token requests are retried the same way.
+        -ClientCredential, token requests are retried like other requests.
 
     .PARAMETER SkipValidation
         Stores the credential without calling the API to verify it.

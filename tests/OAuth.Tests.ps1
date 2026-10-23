@@ -4,9 +4,12 @@ BeforeAll {
 
     function New-TestTokenResponse {
         # A token endpoint answer: 200 with tokens, or an OAuth error.
-        param([string] $AccessToken = 'access-1', [string] $RefreshToken = 'refresh-1', [int] $ExpiresIn = 86399, [string] $ErrorCode, [int] $StatusCode = 200)
+        param(
+            [string] $AccessToken = 'access-1', [string] $RefreshToken = 'refresh-1', [int] $ExpiresIn = 86399,
+            [string] $ErrorCode, [string] $ErrorDescription = "The grant is $ErrorCode.", [int] $StatusCode = 200
+        )
         $content = if ($ErrorCode) {
-            @{ error = $ErrorCode; error_description = "The grant is $ErrorCode." }
+            @{ error = $ErrorCode; error_description = $ErrorDescription }
         }
         else {
             $tokens = @{ access_token = $AccessToken; token_type = 'Bearer'; expires_in = $ExpiresIn; scope = 'read,write' }
@@ -398,10 +401,7 @@ Describe 'Connect-Linear -ClientCredential' {
 
     It 'reports why Linear refused the credentials, and stays disconnected' {
         Mock -ModuleName PSLinear Send-LinearOAuthRequest {
-            [pscustomobject]@{
-                StatusCode = 400
-                Content    = ConvertTo-TestObject -InputObject @{ error = 'unauthorized_client'; error_description = 'Client does not support the client_credentials grant type' }
-            }
+            New-TestTokenResponse -ErrorCode 'unauthorized_client' -ErrorDescription 'Client does not support the client_credentials grant type' -StatusCode 400
         }
         { Connect-Linear -ClientCredential $script:credential } |
             Should -Throw -ErrorId 'PSLinear.OAuthFailed*' -ExpectedMessage '*does not support the client_credentials grant type*'

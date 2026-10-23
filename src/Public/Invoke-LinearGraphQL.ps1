@@ -8,9 +8,9 @@ function Invoke-LinearGraphQL {
         document with the current connection and returns the 'data' part of the response.
 
         You get the same authentication, error handling and rate-limit retries as the
-        other cmdlets. Mutations honour -WhatIf and -Confirm, and like every mutation PSLinear
-        sends, they are not sent again after a server error or a connection that failed during
-        the request (PSLinear.MutationOutcomeUnknown), because Linear may already have run them.
+        other cmdlets. Mutations honour -WhatIf and -Confirm, and are not sent again after a
+        server error or a dropped connection (PSLinear.MutationOutcomeUnknown), because Linear
+        may already have run them.
 
         Explore the schema in Apollo Studio:
         https://studio.apollographql.com/public/Linear-API/variant/current/home

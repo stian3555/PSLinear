@@ -348,20 +348,14 @@ Describe 'Get-LinearIssue' {
             }
         }
 
-        It 'adds the attachments and their metadata to each issue' {
+        It 'adds the attachments and their metadata to each issue, in the same request' {
             $issues = @(Get-LinearIssue -AttachmentUrl 'https://monitor.example/*' -IncludeAttachment)
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter { (Get-RequestOperation $Body) -eq 'ListIssuesWithAttachments' }
             $issues[0].Attachments.Count | Should -Be 1
             $issues[0].Attachments[0].PSObject.TypeNames | Should -Contain 'PSLinear.Attachment'
             $issues[0].Attachments[0].Url | Should -Be 'https://monitor.example/alerts/1'
             $issues[0].Attachments[0].Metadata.managed | Should -BeTrue
             $issues[0].Attachments[0].Issue | Should -Be 'ENG-1'
-        }
-
-        It 'reads 50 issues per request, so the query stays within the complexity limit' {
-            Get-LinearIssue -IncludeAttachment -All | Out-Null
-            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
-                (Get-RequestOperation $Body) -eq 'ListIssuesWithAttachments' -and (Get-RequestVariable $Body 'first') -eq 50
-            }
         }
 
         It 'reads all attachments of an issue that has more than the list returns' {

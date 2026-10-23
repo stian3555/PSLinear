@@ -148,7 +148,8 @@ function Invoke-LinearFileUpload {
         size        = [int]$File.Length
         makePublic  = [bool]$Public
     }
-    $data = Invoke-LinearRequest -Query (Get-LinearGraphQLDocument -Name 'RequestFileUpload') -Variables $variables
+    # fileUpload only signs an upload URL, so it is safe to send again.
+    $data = Invoke-LinearRequest -Query (Get-LinearGraphQLDocument -Name 'RequestFileUpload') -Variables $variables -Idempotent
     $target = Get-LinearNestedValue -InputObject $data -Name 'fileUpload.uploadFile'
     if (-not (Get-LinearNestedValue -InputObject $data -Name 'fileUpload.success') -or $null -eq $target) {
         throw (New-LinearErrorRecord -Message "Linear did not provide an upload URL for '$($File.Name)'." `

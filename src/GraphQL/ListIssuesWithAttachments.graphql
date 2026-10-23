@@ -14,7 +14,7 @@ query ListIssuesWithAttachments(
   ) {
     nodes {
       ...IssueFields
-      attachments(first: 20) {
+      attachments(first: 10) {
         nodes {
           ...AttachmentFields
         }
