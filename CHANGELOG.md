@@ -6,6 +6,23 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Mutations are no longer sent again after a server error (HTTP 5xx) or after a connection that
+  failed during the request, because Linear may already have made the change and a second
+  attempt could create a second issue or comment. They stop with
+  `PSLinear.MutationOutcomeUnknown` instead, so automation can check the result before it
+  retries. Mutations are still retried when they never reached Linear (the host name did not
+  resolve or the connection could not be made) and when Linear refused them because of the
+  rate limit. Queries are retried as before.
+- A server error (HTTP 5xx) always stops the command, also where a missing item is reported as
+  a non-terminating error, so it can no longer be mistaken for an item that does not exist.
+
+### Fixed
+
+- `Invoke-LinearGraphQL` recognizes a mutation that comes after a fragment definition, so
+  `-WhatIf` and `-Confirm` apply to it.
+
 ## [0.2.0] - 2026-10-18
 
 ### Added

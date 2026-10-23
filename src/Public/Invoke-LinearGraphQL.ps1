@@ -8,7 +8,9 @@ function Invoke-LinearGraphQL {
         document with the current connection and returns the 'data' part of the response.
 
         You get the same authentication, error handling and rate-limit retries as the
-        other cmdlets. Mutations honour -WhatIf and -Confirm.
+        other cmdlets. Mutations honour -WhatIf and -Confirm, and like every mutation PSLinear
+        sends, they are not sent again after a server error or a connection that failed during
+        the request (PSLinear.MutationOutcomeUnknown), because Linear may already have run them.
 
         Explore the schema in Apollo Studio:
         https://studio.apollographql.com/public/Linear-API/variant/current/home
@@ -81,11 +83,9 @@ function Invoke-LinearGraphQL {
             $Query
         }
 
-        # Strip comments and leading whitespace before checking the operation type.
-        $normalised = ($document -replace '(?m)#.*$', '').TrimStart()
-        $isMutation = $normalised -match '^mutation\b'
-        if ($isMutation) {
-            $target = if ($OperationName) { $OperationName } elseif ($normalised -match '^mutation\s+([_A-Za-z][_0-9A-Za-z]*)') { $Matches[1] } else { 'anonymous mutation' }
+        $operation = Get-LinearOperation -Document $document -OperationName $OperationName
+        if ($operation.Type -eq 'mutation') {
+            $target = if ($operation.Name) { $operation.Name } else { 'anonymous mutation' }
             if (-not $PSCmdlet.ShouldProcess($target, 'Run Linear GraphQL mutation')) {
                 return
             }
