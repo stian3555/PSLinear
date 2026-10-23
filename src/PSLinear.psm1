@@ -45,6 +45,9 @@ $script:DefaultOAuthRedirectUri = 'http://localhost:47821/callback'
 $script:DefaultOAuthClientId = '410663939bc11881898c33ce6ba801db'
 $script:DefaultPageSize = 50
 $script:MaxPageSize = 100
+# Issues per page when they include their first 20 attachments (ListIssuesWithAttachments), which
+# keeps each page well under Linear's limit of 10,000 complexity points.
+$script:IssueWithAttachmentsPageSize = 50
 $script:CacheLifetime = [timespan]::FromMinutes(10)
 # Error messages for unknown names list at most this many valid values.
 $script:MaxListedValues = 30

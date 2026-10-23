@@ -69,9 +69,21 @@ function Get-LinearIssue {
         Only issues in this cycle: active (or current), next, previous, a cycle number, a cycle
         name or an id. Numbers and names apply to every team unless -Team is given.
 
+    .PARAMETER AttachmentUrl
+        Only issues with an attachment whose URL matches one of these values. A value matches the
+        whole URL; end it with * to match every URL that starts with it, as in
+        'https://monitor.example/alerts/*', start it with * to match the end, or both to match
+        any part. Only * is special, so URLs with ? and [ can be given as they are.
+
     .PARAMETER Filter
         A raw Linear IssueFilter as a hashtable, combined with the other filter parameters
         using AND. See https://linear.app/developers/filtering.
+
+    .PARAMETER IncludeAttachment
+        Adds each issue's attachments, with their metadata, as an Attachments property, read in
+        the same requests as the issues. Issues come 50 per request instead of 100 to stay within
+        Linear's query complexity limit, and an issue with more than 20 attachments takes one
+        extra request.
 
     .PARAMETER OrderBy
         UpdatedAt (default) or CreatedAt. Results are returned newest first.
@@ -124,6 +136,13 @@ function Get-LinearIssue {
         Get-LinearIssue -Filter @{ dueDate = @{ lt = (Get-Date).ToString('yyyy-MM-dd') } } -StateType Unstarted, Started
 
         Combines a raw IssueFilter (overdue issues) with regular parameters.
+
+    .EXAMPLE
+        Get-LinearIssue -Team OPS -AttachmentUrl 'https://monitor.example/alerts/*' -IncludeAttachment -IncludeArchived -All
+
+        Every issue of the team with an attachment that links to the monitoring system, in any
+        state and also archived, with the attachments and their metadata. A sync job can compare
+        these with the alerts it knows about, without a request per issue.
 
     .INPUTS
         System.String
@@ -207,8 +226,15 @@ function Get-LinearIssue {
         [string] $Milestone,
 
         [Parameter(ParameterSetName = 'List')]
+        [ValidateNotNullOrEmpty()]
+        [string[]] $AttachmentUrl,
+
+        [Parameter(ParameterSetName = 'List')]
         [ValidateNotNull()]
         [hashtable] $Filter,
+
+        [Parameter(ParameterSetName = 'List')]
+        [switch] $IncludeAttachment,
 
         [Parameter(ParameterSetName = 'List')]
         [ValidateSet('UpdatedAt', 'CreatedAt')]
@@ -353,6 +379,10 @@ function Get-LinearIssue {
                 }
             }
 
+            if ($AttachmentUrl) {
+                $issueFilter['attachments'] = @{ some = @{ or = @(foreach ($url in $AttachmentUrl) { @{ url = ConvertTo-LinearUrlComparator -Url $url } }) } }
+            }
+
             if ($Filter) {
                 $issueFilter = if ($issueFilter.Count -gt 0) { @{ and = @($issueFilter, $Filter) } } else { $Filter }
             }
@@ -369,7 +399,15 @@ function Get-LinearIssue {
         if ($issueFilter.Count -gt 0) { $variables['filter'] = $issueFilter }
 
         $limit = if ($All) { 0 } else { $First }
-        Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListIssues') -ConnectionPath 'issues' -Variables $variables -Limit $limit |
-            ConvertTo-LinearIssue
+        if ($IncludeAttachment) {
+            Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListIssuesWithAttachments') -ConnectionPath 'issues' -Variables $variables `
+                -Limit $limit -PageSize $script:IssueWithAttachmentsPageSize |
+                Complete-LinearIssueAttachment |
+                ConvertTo-LinearIssue
+        }
+        else {
+            Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListIssues') -ConnectionPath 'issues' -Variables $variables -Limit $limit |
+                ConvertTo-LinearIssue
+        }
     }
 }

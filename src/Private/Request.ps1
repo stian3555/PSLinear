@@ -262,6 +262,9 @@ function Invoke-LinearPagedRequest {
         Dot-separated path from 'data' to the connection, for example 'issues' or 'team.issues'.
     .PARAMETER Limit
         Maximum number of nodes to return. Use 0 for no limit.
+    .PARAMETER PageSize
+        Maximum number of nodes per request, at most $script:MaxPageSize. Use a smaller page for a
+        query with nested connections, to stay within Linear's complexity limit.
     .PARAMETER IncludeErrors
         Collect every page and return [pscustomobject]@{ Nodes; Errors } instead of streaming the
         nodes and throwing on GraphQL errors. Paging stops at the first page with errors. Like
@@ -281,9 +284,13 @@ function Invoke-LinearPagedRequest {
         [ValidateRange(0, [int]::MaxValue)]
         [int] $Limit = $script:DefaultPageSize,
 
+        [ValidateRange(1, [int]::MaxValue)]
+        [int] $PageSize = $script:MaxPageSize,
+
         [switch] $IncludeErrors
     )
 
+    $PageSize = [math]::Min($PageSize, $script:MaxPageSize)
     $pageVariables = @{}
     foreach ($key in $Variables.Keys) { $pageVariables[$key] = $Variables[$key] }
     $collected = [System.Collections.Generic.List[object]]::new()
@@ -293,7 +300,7 @@ function Invoke-LinearPagedRequest {
     $page = 0
     do {
         $page++
-        $pageVariables['first'] = [math]::Min($script:MaxPageSize, $remaining)
+        $pageVariables['first'] = [math]::Min($PageSize, $remaining)
         $pageVariables['after'] = $after
         Write-Verbose "Fetching page $page ($($pageVariables['first']) items)."
 

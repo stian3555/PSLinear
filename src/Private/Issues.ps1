@@ -96,6 +96,63 @@ function ConvertTo-LinearUserFilter {
     @{ or = @(@{ name = @{ eqIgnoreCase = $User } }, @{ displayName = @{ eqIgnoreCase = $User } }) }
 }
 
+function ConvertTo-LinearUrlComparator {
+    <#
+    .SYNOPSIS
+        Builds a StringComparator for a URL: exact, or with * at the end (starts with), at the
+        start (ends with) or at both ends (contains).
+    .NOTES
+        Only * is special, because URLs often contain ? and [. Throws an ErrorRecord
+        (PSLinear.InvalidArgument) for a * anywhere else.
+    #>
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param(
+        [Parameter(Mandatory)]
+        [string] $Url
+    )
+
+    $leading = $Url.StartsWith('*')
+    $trailing = $Url.Length -gt 1 -and $Url.EndsWith('*')
+    $text = $Url.Substring([int]$leading, $Url.Length - [int]$leading - [int]$trailing)
+    if ($text.Length -eq 0 -or $text.Contains('*')) {
+        throw (New-LinearErrorRecord -Message "'$Url' is not a URL pattern. Use * only at the start or the end, for example 'https://monitor.example/alerts/*'." `
+                -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument -TargetObject $Url)
+    }
+    if ($leading -and $trailing) { return @{ contains = $text } }
+    if ($trailing) { return @{ startsWith = $text } }
+    if ($leading) { return @{ endsWith = $text } }
+    @{ eq = $text }
+}
+
+function Complete-LinearIssueAttachment {
+    <#
+    .SYNOPSIS
+        Makes sure an issue node from ListIssuesWithAttachments holds all of its attachments.
+    .DESCRIPTION
+        The list query reads only the first attachments of each issue, to keep its complexity
+        low. For an issue that has more, all of them are read with ListIssueAttachments, so
+        callers that look for an attachment never miss one.
+    #>
+    [CmdletBinding()]
+    [OutputType([pscustomobject])]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [AllowNull()]
+        [object] $InputObject
+    )
+
+    process {
+        if ($null -eq $InputObject) { return }
+        if (Get-LinearNestedValue -InputObject $InputObject -Name 'attachments.pageInfo.hasNextPage') {
+            Write-Verbose "Issue $($InputObject.identifier) has more attachments than the list returns; reading all of them."
+            $InputObject.attachments.nodes = @(Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListIssueAttachments') `
+                    -ConnectionPath 'issue.attachments' -Variables @{ id = $InputObject.id } -Limit 0)
+        }
+        $InputObject
+    }
+}
+
 function Get-LinearIssueReference {
     <#
     .SYNOPSIS

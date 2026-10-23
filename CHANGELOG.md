@@ -21,6 +21,11 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - `Add-LinearAttachment -Url` takes `-Subtitle`.
 - `Set-LinearAttachment -AddMetadata` and `-RemoveMetadata` change some metadata values and keep
   the others, including what integrations store.
+- `Get-LinearIssue -AttachmentUrl` finds issues by the URLs of their attachments: a whole URL,
+  or a pattern with `*` at the start or end, such as `'https://monitor.example/alerts/*'`.
+- `Get-LinearIssue -IncludeAttachment` adds each issue's attachments, with their metadata, as an
+  `Attachments` property, read in the same requests as the issues instead of one request per
+  issue. An issue with more than 20 attachments costs one extra request, so none are left out.
 
 ### Changed
 
