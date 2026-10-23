@@ -107,10 +107,68 @@ Describe 'Add-LinearAttachment' {
             }
         }
 
-        It 'refuses values that are not strings or numbers, before sending anything' {
-            { Add-LinearAttachment -Issue ENG-1 -Url 'https://example.com' -Metadata @{ done = $true } } |
-                Should -Throw -ErrorId 'PSLinear.InvalidArgument*' -ExpectedMessage "*Metadata value 'done' is Boolean; Linear accepts only strings and numbers.*"
-            { Add-LinearAttachment -Issue ENG-1 -Url 'https://example.com' -Metadata @{ nested = @{ a = 1 } } } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*'
+        It 'sets the subtitle and metadata on a link right after creating it' {
+            $attachment = Add-LinearAttachment -Issue ENG-1 -Url 'https://example.com/doc' -Subtitle 'Wiki page' -Metadata @{ source = 'wiki' }
+            $attachment.Subtitle | Should -Be 'Wiki page'
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                (Get-RequestOperation $Body) -eq 'UpdateAttachment' -and
+                (Get-RequestVariable $Body 'input.subtitle') -eq 'Wiki page' -and
+                (Get-RequestVariable $Body 'input.metadata.source') -eq 'wiki'
+            }
+        }
+
+        It 'stores boolean values' {
+            $attachment = Add-LinearAttachment -Issue ENG-1 -Path (Join-Path $TestDrive 'files/spec.pdf') -Metadata @{ managed = $true; retired = $false }
+            $attachment.Metadata.managed | Should -BeTrue
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                (Get-RequestVariable $Body 'input.metadata.managed') -is [bool] -and
+                (Get-RequestVariable $Body 'input.metadata.managed') -eq $true -and
+                (Get-RequestVariable $Body 'input.metadata.retired') -eq $false
+            }
+        }
+
+        It 'refuses values that are not strings, numbers or booleans, before sending anything' {
+            { Add-LinearAttachment -Issue ENG-1 -Url 'https://example.com' -Metadata @{ nested = @{ a = 1 } } } |
+                Should -Throw -ErrorId 'PSLinear.InvalidArgument*' -ExpectedMessage "*Metadata value 'nested' is Hashtable; metadata values can be strings, numbers and booleans.*"
+            { Add-LinearAttachment -Issue ENG-1 -Url 'https://example.com' -Metadata @{ list = @(1, 2) } } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*'
+            { Add-LinearAttachment -Issue ENG-1 -Url 'https://example.com' -Metadata @{ empty = $null } } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*'
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
+        }
+    }
+
+    Context 'Links without integrations (-NoRichLink)' {
+        It 'creates the attachment with its title, subtitle and metadata in one request' {
+            $attachment = Add-LinearAttachment ENG-1 -Url 'https://monitor.example/alerts/42' -Title 'Alert 42' -Subtitle 'Firing' `
+                -Metadata @{ alertId = 42; managed = $true } -NoRichLink
+            $attachment.Title | Should -Be 'Alert 42'
+            $attachment.Subtitle | Should -Be 'Firing'
+            $attachment.Metadata.alertId | Should -Be 42
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
+                (Get-RequestOperation $Body) -eq 'CreateAttachment' -and
+                (Get-RequestVariable $Body 'input.issueId') -eq 'ENG-1' -and
+                (Get-RequestVariable $Body 'input.url') -eq 'https://monitor.example/alerts/42' -and
+                (Get-RequestVariable $Body 'input.title') -eq 'Alert 42' -and
+                (Get-RequestVariable $Body 'input.subtitle') -eq 'Firing' -and
+                (Get-RequestVariable $Body 'input.metadata.managed') -eq $true
+            }
+        }
+
+        It 'uses the URL as the title when -Title is not given' {
+            (Add-LinearAttachment ENG-1 -Url 'https://monitor.example/alerts/42' -NoRichLink).Title | Should -Be 'https://monitor.example/alerts/42'
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly -ParameterFilter { (Get-RequestOperation $Body) -eq 'LinkAttachmentUrl' }
+        }
+
+        It 'writes one error when the issue does not exist' {
+            Add-LinearAttachment ENG-404 -Url 'https://monitor.example/alerts/42' -NoRichLink -ErrorAction SilentlyContinue -ErrorVariable linkErrors |
+                Should -BeNullOrEmpty
+            $linkErrors.Count | Should -Be 1
+            $linkErrors[0].FullyQualifiedErrorId | Should -BeLike 'PSLinear.AttachmentCreateFailed*'
+            $linkErrors[0].Exception.Message | Should -BeLike '*Entity not found: Issue*'
+        }
+
+        It 'sends nothing with -WhatIf' {
+            Add-LinearAttachment ENG-1 -Url 'https://monitor.example/alerts/42' -NoRichLink -WhatIf
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
         }
     }

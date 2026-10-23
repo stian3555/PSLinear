@@ -586,7 +586,8 @@ function Get-LinearTestAttachmentResponse {
     #              https://uploads.linear.app/asset/<file name>. Linear returns two signed headers
     #              (one value with a trailing space); for override.bin it also returns a content-type.
     #              noupload.png gets no upload URL.
-    # Attachments: the title 'reject' is rejected; the attachment id 'missing' does not exist.
+    # Attachments: the title 'reject' is rejected; the attachment id 'missing' does not exist;
+    #              attachmentCreate for ENG-404 reports the issue as not found.
     param([Parameter(Mandatory)][hashtable] $Request)
 
     $query = $Request.query
@@ -625,6 +626,9 @@ function Get-LinearTestAttachmentResponse {
     }
     if ($query -match 'mutation CreateAttachment') {
         $attachmentInput = $variables.input
+        if ($attachmentInput['issueId'] -eq 'ENG-404') {
+            return New-LinearTestResponse -Data @{ attachmentCreate = $null } -Errors @(New-LinearTestError -Message 'Entity not found: Issue' -Code 'INPUT_ERROR')
+        }
         if ($attachmentInput['title'] -eq 'reject') {
             return New-LinearTestResponse -Data @{ attachmentCreate = $null } -Errors @(New-LinearTestError -Message 'Argument Validation Error' -Code 'INPUT_ERROR')
         }
@@ -655,7 +659,8 @@ function Get-LinearTestAttachmentResponse {
     }
     if ($query -match 'mutation UpdateAttachment') {
         if ($variables.id -eq 'attachment-link') {
-            $node = New-LinearTestAttachmentNode -Id 'attachment-link' -Title $variables.input['title'] -Url 'https://example.com/doc' -Metadata $variables.input['metadata']
+            $metadata = if ($variables.input.Contains('metadata')) { $variables.input['metadata'] } else { @{} }
+            $node = New-LinearTestAttachmentNode -Id 'attachment-link' -Title $variables.input['title'] -Subtitle $variables.input['subtitle'] -Url 'https://example.com/doc' -Metadata $metadata
             return New-LinearTestResponse -Data @{ attachmentUpdate = @{ success = $true; attachment = $node } }
         }
         if (-not $attachments.ContainsKey($variables.id)) { return New-LinearTestResponse -Data @{ attachmentUpdate = $null } -Errors @($notFound) }

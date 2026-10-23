@@ -204,8 +204,8 @@ function ConvertTo-LinearAttachmentMetadataInput {
     .SYNOPSIS
         Checks attachment metadata given as a hashtable and returns it for the API.
     .DESCRIPTION
-        Linear accepts an object of string and number values. Keys become strings; a value of any
-        other type (a boolean, a date, a nested object or a list) is refused before anything is
+        Metadata is an object of string, number and boolean values. Keys become strings; a value
+        of any other type (a date, a nested object, a list or null) is refused before anything is
         sent.
     .NOTES
         Throws an ErrorRecord (PSLinear.InvalidArgument) that callers rethrow with $PSCmdlet.ThrowTerminatingError.
@@ -222,10 +222,10 @@ function ConvertTo-LinearAttachmentMetadataInput {
     $result = @{}
     foreach ($entry in $Metadata.GetEnumerator()) {
         $value = $entry.Value
-        $isAllowed = $value -is [string] -or $null -ne ($numberTypes | Where-Object { $value -is $_ } | Select-Object -First 1)
+        $isAllowed = $value -is [string] -or $value -is [bool] -or $null -ne ($numberTypes | Where-Object { $value -is $_ } | Select-Object -First 1)
         if (-not $isAllowed) {
             $typeName = if ($null -eq $value) { 'null' } else { $value.GetType().Name }
-            throw (New-LinearErrorRecord -Message "Metadata value '$($entry.Key)' is $typeName; Linear accepts only strings and numbers." `
+            throw (New-LinearErrorRecord -Message "Metadata value '$($entry.Key)' is $typeName; metadata values can be strings, numbers and booleans." `
                     -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument -TargetObject $entry.Key)
         }
         $result[[string]$entry.Key] = $value
