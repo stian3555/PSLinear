@@ -49,7 +49,10 @@ function Add-LinearAttachment {
     .PARAMETER NoRichLink
         With -Url, creates the attachment in one request with the title, subtitle and metadata
         given, instead of letting the workspace's integrations turn the link into a rich
-        attachment. A later call with the same URL and issue updates that attachment.
+        attachment. A later call with the same URL and issue updates that attachment: it sets
+        the title (the URL when -Title is left out), and the subtitle and metadata when they are
+        given; -Metadata then replaces all of the metadata. To change some metadata values and
+        keep the others, use Set-LinearAttachment -AddMetadata.
 
     .PARAMETER Metadata
         Your own data to store on the attachment, as a hashtable of string, number and boolean

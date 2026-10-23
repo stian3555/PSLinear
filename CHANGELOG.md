@@ -17,7 +17,8 @@ and this project follows [Semantic Versioning](https://semver.org/).
 - `Add-LinearAttachment -Url -NoRichLink` creates a link attachment with exactly the title,
   subtitle and metadata given, in one request and without integrations. Linear identifies the
   attachment by its URL, so running the same command again updates the attachment instead of
-  adding another one.
+  adding another one. An update sets the title, and the subtitle and metadata when they are
+  given (`-Metadata` replaces all of the metadata).
 - `Add-LinearAttachment -Url` takes `-Subtitle`.
 - `Set-LinearAttachment -AddMetadata` and `-RemoveMetadata` change some metadata values and keep
   the others, including what integrations store.
