@@ -30,7 +30,6 @@ and this project follows [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - Attachment metadata can hold boolean values as well as strings and numbers.
-
 - Mutations are no longer sent again after a server error (HTTP 5xx) or after a connection that
   failed during the request, because Linear may already have made the change and a second
   attempt could create a second issue or comment. They stop with

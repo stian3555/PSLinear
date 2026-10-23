@@ -41,14 +41,15 @@ ENG-398      Todo             Medium      Ada Lovelace         Document the depl
 - **Fits your git workflow.** `Start-LinearIssue` assigns an issue to you, moves it to In
   Progress and checks out its branch; `Get-LinearIssue -Current` finds the issue of the branch
   you are on.
-- **Sign in your way.** In the browser (OAuth with PKCE, renewed automatically), with a
-  personal API key, from a SecretManagement vault, or from an environment variable in CI.
-  Tokens stay in memory as `SecureString`.
+- **Sign in your way.** In the browser (OAuth with PKCE, renewed automatically), as an OAuth
+  application with client credentials for unattended automation, with a personal API key, from
+  a SecretManagement vault, or from an environment variable in CI. Tokens stay in memory as
+  `SecureString`.
 - **Automatic paging.** Results stream page by page. `-First` sets a limit; `-All` follows
   pagination to the end. Stopping early (`| Select-Object -First 5`) stops the requests too.
 - **Handles the API's rules for you.** Retries rate-limited requests, server errors and
-  network failures with backoff, reports GraphQL errors even when they arrive with HTTP 200,
-  and keeps queries well below Linear's complexity limit.
+  network failures with backoff, but never sends a change twice; reports GraphQL errors even
+  when they arrive with HTTP 200; and keeps queries well below Linear's complexity limit.
 - **Escape hatch.** `Invoke-LinearGraphQL` runs any query or mutation, with `-WhatIf` for
   mutations.
 - **Cross-platform.** PowerShell 7.4+ on Windows, macOS and Linux, tested on all three.
@@ -82,6 +83,7 @@ Prefer an API key? Create one in Linear under **Settings > Security & access** a
 | Method | Command |
 | --- | --- |
 | Sign in through the browser (OAuth) | `Connect-Linear -Browser [-SecretName LinearSignIn]` |
+| OAuth application (client credentials) | `Connect-Linear -ClientCredential $credential [-Scope read, write]` |
 | Personal API key (prompt) | `Connect-Linear` |
 | Personal API key (value) | `Connect-Linear -ApiKey $secureString` |
 | SecretManagement vault | `Connect-Linear -SecretName LinearApiKey [-Vault MyVault]` |
@@ -123,6 +125,30 @@ page shows or to restrict sign-ins to your workspace:
    `http://localhost:47821/callback` and `http://127.0.0.1:47821/callback`.
 3. Connect with its client id, or set `LINEAR_OAUTH_CLIENT_ID`:
    `Connect-Linear -Browser -ClientId 'your-client-id'`.
+
+### Signing in as an application
+
+For automation that runs without a person, such as a scheduled job or a function app, sign in
+as an OAuth application with the client credentials grant. Linear then shows the application,
+not the owner of a personal API key, as the creator of issues and comments, and the credential
+does not stop working when someone leaves.
+
+1. In Linear, go to **Settings > API > OAuth applications**, create an application and turn on
+   **client credentials**. Note its client id and client secret.
+2. Store the secret where your automation keeps secrets, for example in a key vault or a
+   protected environment variable.
+3. Connect with the id as the user name and the secret as the password:
+
+```powershell
+$secret = ConvertTo-SecureString -String $env:LINEAR_CLIENT_SECRET -AsPlainText -Force
+Connect-Linear -ClientCredential ([pscredential]::new($env:LINEAR_CLIENT_ID, $secret)) -Scope read, write
+```
+
+The token lasts 30 days. PSLinear keeps the secret as a `SecureString` and requests a new token
+before the old one expires, and once more when Linear rejects it, so a long-running host only
+needs to connect once, when it starts. Nothing is written to disk. Linear revokes all of the
+application's tokens when one is requested with different scopes, so use the same `-Scope`
+everywhere the application signs in.
 
 ## Examples
 
@@ -193,6 +219,9 @@ Get-LinearComment ENG-412 | Where-Object { -not $_.IsReply -and -not $_.Resolved
 Add-LinearAttachment ENG-412 ./logs/*.log -Comment 'Logs from the failed run.'
 Add-LinearAttachment ENG-412 -Url https://github.com/acme/app/pull/42
 Add-LinearComment ENG-412 'After the fix:' -Attachment ./after.png
+
+# Change one metadata value on the attachments of a build system, keeping the others
+Get-LinearAttachment ENG-412 | Where-Object Url -Like 'https://ci.example/*' | Set-LinearAttachment -AddMetadata @{ passed = $true }
 
 # What blocks my open work, and mark a duplicate
 Get-LinearIssue -Assignee me -StateType Unstarted, Started | Get-LinearIssueRelation -Type BlockedBy
@@ -268,6 +297,59 @@ Invoke-LinearGraphQL -Query '{ viewer { assignedIssues(first: 5) { nodes { ident
 Invoke-LinearGraphQL -Query 'mutation($id: String!) { issueUnarchive(id: $id) { success } }' -Variables @{ id = 'ENG-1' } -WhatIf
 ```
 
+## Automation
+
+PSLinear also runs unattended, for example in a job that keeps Linear issues in sync with
+alerts, findings or tickets in another system. Sign in [as an application](#signing-in-as-an-application),
+and let the job find its issues by the attachments it owns:
+
+```powershell
+$ErrorActionPreference = 'Stop'
+$alertUrl = 'https://monitor.example/alerts/42'
+
+# Look at every state, and at archived issues too, since Linear can archive closed issues automatically
+$issue = Get-LinearIssue -Team OPS -AttachmentUrl $alertUrl -IncludeArchived -IncludeAttachment -All | Select-Object -First 1
+if (-not $issue) {
+    $issue = New-LinearIssue -Team OPS -Title 'Disk almost full on web-1' -State Todo
+}
+
+# Create the attachment that identifies the alert, or update it on later runs
+Add-LinearAttachment $issue.Identifier -Url $alertUrl -Title 'Alert 42' -Subtitle 'Firing' -Metadata @{ alertId = 42; resolved = $false } -NoRichLink
+```
+
+To check many items at once, read every issue of the job with
+`-AttachmentUrl 'https://monitor.example/alerts/*' -IncludeAttachment -IncludeArchived -All` and
+compare the attachments' URLs and metadata in memory, instead of searching item by item.
+
+### Errors you can rely on
+
+- An empty result means that Linear found nothing. A failure is always reported as an error,
+  never as an empty or shortened list.
+- Failures of the API itself stop the command (a terminating error). A missing item, such as an
+  issue identifier that does not exist, writes a non-terminating error so a pipeline can go on.
+- PowerShell runs the next statement after both kinds of error unless you say otherwise, so set
+  `$ErrorActionPreference = 'Stop'` (or use `-ErrorAction Stop`) in automation. Then a list that
+  fails on a later page throws before the variable is assigned, so the job never works with
+  part of the list.
+- A change is never sent twice. PSLinear retries a mutation only when it never reached Linear or
+  when Linear refused it because of the rate limit. After a server error, or a connection that
+  failed during the request, the change may or may not have been made, so the command stops
+  with `PSLinear.MutationOutcomeUnknown`. Check the result, for example on the job's next run,
+  before you try again.
+
+Errors carry a stable id in `$_.FullyQualifiedErrorId`:
+
+| Error id | Meaning |
+| --- | --- |
+| `PSLinear.NotConnected`, `PSLinear.AuthenticationFailed`, `PSLinear.OAuthFailed`, `PSLinear.TokenRefreshFailed` | No valid credential, or the sign-in failed. |
+| `PSLinear.ConnectionFailed` | Linear could not be reached, also after the retries. Nothing was changed. |
+| `PSLinear.RateLimited` | Still rate limited after the retries. Nothing was changed. |
+| `PSLinear.MutationOutcomeUnknown` | A change was sent, but the connection failed or Linear answered with a server error. Linear may or may not have made it. |
+| `PSLinear.GraphQLError`, `PSLinear.HttpError` | Linear answered with an error. |
+| `PSLinear.<Item>NotFound`, such as `PSLinear.IssueNotFound` | An item that does not exist. Non-terminating for an item you ask for (such as an issue identifier); an unknown name in a parameter (such as `-State`) stops the command before anything is sent. |
+| `PSLinear.<Item>CreateFailed`, `PSLinear.<Item>UpdateFailed` | Linear rejected a change, for example invalid input (non-terminating). |
+| `PSLinear.InvalidArgument`, `PSLinear.InvalidFilter` | Invalid parameters, or a filter that cannot be built (for example an unknown team). Nothing was sent. |
+
 ## Commands
 
 Run `Get-Help <command> -Full` for every parameter and more examples.
@@ -276,7 +358,7 @@ Run `Get-Help <command> -Full` for every parameter and more examples.
 
 | Command | Description |
 | --- | --- |
-| `Connect-Linear` | Connect with a browser sign-in (OAuth with PKCE), an API key, a vault secret, an environment variable or an OAuth token. |
+| `Connect-Linear` | Connect with a browser sign-in (OAuth with PKCE), an OAuth application's client credentials, an API key, a vault secret, an environment variable or an OAuth token. |
 | `Disconnect-Linear` | Forget the credential and cached data; `-Revoke` also revokes an OAuth sign-in. |
 | `Get-LinearViewer` | The authenticated user and organization. |
 | `Get-LinearRateLimit` | Rate-limit status from the latest response. |
@@ -285,7 +367,7 @@ Run `Get-Help <command> -Full` for every parameter and more examples.
 
 | Command | Description |
 | --- | --- |
-| `Get-LinearIssue` | Issues by identifier or URL, the issue of the current git branch (`-Current`), or filtered lists with paging. |
+| `Get-LinearIssue` | Issues by identifier or URL, the issue of the current git branch (`-Current`), or filtered lists with paging, also by attachment URL and with the attachments included. |
 | `New-LinearIssue` | Create an issue, with states, labels, projects, milestones, cycles, users and templates given by name. |
 | `Set-LinearIssue` | Change issues: state, assignee, labels (replace, add or remove), priority and more, or clear values with `-Clear`. |
 | `Start-LinearIssue` | Start an issue: assign it to you, move it to a started state and check out its git branch. |
@@ -300,8 +382,8 @@ Run `Get-Help <command> -Full` for every parameter and more examples.
 | `Set-LinearComment` | Edit a comment, or resolve or reopen its thread. |
 | `Remove-LinearComment` | Delete comments. |
 | `Get-LinearAttachment` | Attachments of issues: uploaded files, links and integration links. |
-| `Add-LinearAttachment` | Upload files to an issue (private by default) or link a URL to it, with optional metadata. |
-| `Set-LinearAttachment` | Change an attachment's title, subtitle or metadata. |
+| `Add-LinearAttachment` | Upload files to an issue (private by default) or link a URL to it, with optional metadata; `-NoRichLink` creates or updates a link in one request. |
+| `Set-LinearAttachment` | Change an attachment's title, subtitle or metadata (replace it, or add and remove values). |
 | `Remove-LinearAttachment` | Remove attachments from issues. |
 | `Get-LinearIssueRelation` | Relations of an issue, seen from it: Blocks, BlockedBy, Related, DuplicateOf, DuplicatedBy. |
 | `Add-LinearIssueRelation` | Relate issues: blocks, blocked by, related or duplicate. |
@@ -377,10 +459,13 @@ Run `Get-Help <command> -Full` for every parameter and more examples.
 
 - **Endpoint and auth.** All calls go to `https://api.linear.app/graphql`. Personal API keys
   are sent in the `Authorization` header as-is; OAuth tokens use `Bearer`, and tokens from a
-  browser sign-in are renewed shortly before they expire (or once, when Linear rejects one).
-- **Rate limits.** Linear limits requests and query complexity per hour, per user. PSLinear
-  retries rate-limited calls with exponential backoff (3 times by default, set with
-  `Connect-Linear -MaxRetries`). `Get-LinearRateLimit` shows the remaining budget.
+  browser sign-in or client credentials are renewed shortly before they expire (or once, when
+  Linear rejects one).
+- **Rate limits and retries.** Linear limits requests and query complexity per hour, per user.
+  PSLinear retries rate-limited calls, server errors and network failures with exponential
+  backoff (3 times by default, set with `Connect-Linear -MaxRetries`). Mutations are retried
+  only when Linear refused them or they never reached it, so a change is never made twice.
+  `Get-LinearRateLimit` shows the remaining budget.
 - **Complexity.** Linear rejects any single query above 10,000 complexity points. Pages are
   capped at 100 items, and nested lists are kept small, so every query stays well below that.
 - **Name lookups.** Team, workflow state, label, user, project, project status, project label,
@@ -390,8 +475,9 @@ Run `Get-Help <command> -Full` for every parameter and more examples.
   found triggers one refresh.
 - **Errors.** GraphQL errors are turned into PowerShell errors with the Linear error code in
   the message. A missing item, or a change Linear rejects, writes a non-terminating error, so
-  the rest of the pipeline continues. Unknown names and invalid parameter combinations stop the
-  command before anything is sent.
+  the rest of the pipeline continues. Server, network and authentication failures always stop
+  the command. Unknown names and invalid parameter combinations stop the command before
+  anything is sent. See [Errors you can rely on](#errors-you-can-rely-on).
 
 ## Development
 
