@@ -1,6 +1,6 @@
 @{
     RootModule           = 'PSLinear.psm1'
-    ModuleVersion        = '0.2.0'
+    ModuleVersion        = '0.3.0'
     GUID                 = '40af22af-f469-4d7e-a6fa-4419ae93dbda'
     Author               = 'Stian Johansen'
     CompanyName          = 'Community'
