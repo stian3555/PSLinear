@@ -35,8 +35,10 @@ Describe 'Document commands' {
             $plan.Content | Should -BeNullOrEmpty
             $documents[0].ContainerType | Should -Be 'Issue'
             $documents[0].Container | Should -Be 'ENG-1'
-            $documents[2].ContainerType | Should -Be 'Team'
-            $documents[2].Container | Should -Be 'OPS'
+            # Linear no longer reports a document's team.
+            $documents[2].Container | Should -BeNullOrEmpty
+            $documents[2].ContainerType | Should -BeNullOrEmpty
+            $documents[2].PSObject.Properties.Name | Should -Not -Contain 'TeamId'
             $documents[3].ContainerType | Should -Be 'Initiative'
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
                 (Get-RequestOperation $Body) -eq 'ListDocuments' -and $null -eq (Get-RequestVariable $Body 'filter') -and (Get-RequestVariable $Body 'includeArchived') -eq $false
@@ -110,7 +112,7 @@ Describe 'Document commands' {
 
         It 'stops for piped objects that cannot hold documents' {
             $comment = [pscustomobject]@{ PSTypeName = 'PSLinear.Comment'; Id = 'comment-1' }
-            { $comment | Get-LinearDocument } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*'
+            { $comment | Get-LinearDocument } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*' -ExpectedMessage 'Documents belong to an issue, a project, an initiative or a team.*'
         }
 
         It 'stops with the valid names for an unknown project' {
@@ -135,13 +137,27 @@ Describe 'Document commands' {
             }
         }
 
-        It 'creates documents in an issue, initiative or team' {
+        It 'creates a document in an issue' {
             (New-LinearDocument 'Notes' -Issue ENG-7).Container | Should -Be 'ENG-7'
-            (New-LinearDocument 'Goals' -Initiative 'Q1 growth').ContainerType | Should -Be 'Initiative'
-            (New-LinearDocument 'Handbook' -Team OPS).Container | Should -Be 'OPS'
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter { (Get-RequestVariable $Body 'input.issueId') -eq 'ENG-7' }
-            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter { (Get-RequestVariable $Body 'input.initiativeId') -eq 'initiative-growth' }
-            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter { (Get-RequestVariable $Body 'input.teamId') -eq 'team-ops' }
+        }
+
+        It 'refuses teams and initiatives, which Linear no longer accepts, before sending anything' {
+            $team = [pscustomobject]@{ PSTypeName = 'PSLinear.Team'; Id = 'team-ops'; Key = 'OPS' }
+            $initiative = [pscustomobject]@{ PSTypeName = 'PSLinear.Initiative'; Id = 'initiative-growth'; Name = 'Q1 growth' }
+            { $team | New-LinearDocument 'Handbook' } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*' `
+                -ExpectedMessage "Linear's API no longer creates documents in teams or initiatives, so team OPS cannot hold a new document. Use an issue or a project."
+            { $initiative | New-LinearDocument 'Goals' } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*' -ExpectedMessage "*so initiative 'Q1 growth' cannot hold*"
+            { New-LinearDocument 'Handbook' -Team OPS } | Should -Throw -ErrorId 'NamedParameterNotFound*'
+            { New-LinearDocument 'Goals' -Initiative 'Q1 growth' } | Should -Throw -ErrorId 'NamedParameterNotFound*'
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
+        }
+
+        It 'stops for piped objects that cannot hold documents, before sending anything' {
+            $comment = [pscustomobject]@{ PSTypeName = 'PSLinear.Comment'; Id = 'comment-1' }
+            { $comment | New-LinearDocument 'Notes' } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*' `
+                -ExpectedMessage 'Documents are created in an issue or a project. Pipe in PSLinear.Issue or PSLinear.Project objects.'
+            Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly
         }
 
         It 'creates a document in a piped container without looking it up' {
@@ -154,7 +170,7 @@ Describe 'Document commands' {
         }
 
         It 'sends no content when -Content is not given' {
-            $null = New-LinearDocument 'Empty' -Team ENG
+            $null = New-LinearDocument 'Empty' -Issue ENG-7
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
                 (Get-RequestOperation $Body) -eq 'CreateDocument' -and -not (Get-RequestBody $Body).variables.input.Contains('content')
             }
@@ -173,7 +189,6 @@ Describe 'Document commands' {
 
         It 'stops for an unknown container name' {
             { New-LinearDocument 'Bad' -Project Intranet } | Should -Throw -ErrorId 'PSLinear.ProjectNotFound*'
-            { New-LinearDocument 'Bad' -Team NOPE } | Should -Throw -ErrorId 'PSLinear.TeamNotFound*'
         }
     }
 
@@ -201,10 +216,12 @@ Describe 'Document commands' {
             $moved = Set-LinearDocument -Id doc-plan -Issue ENG-9 -PassThru
             $moved.ContainerType | Should -Be 'Issue'
             $moved.ProjectId | Should -BeNullOrEmpty
-            Get-LinearDocument -Project Website | Set-LinearDocument -Team OPS
+            Get-LinearDocument -Team OPS | Set-LinearDocument -Project 'Mobile App'
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
-                (Get-RequestOperation $Body) -eq 'UpdateDocument' -and (Get-RequestVariable $Body 'input.teamId') -eq 'team-ops'
+                (Get-RequestOperation $Body) -eq 'UpdateDocument' -and (Get-RequestVariable $Body 'id') -eq 'doc-handbook' -and
+                (Get-RequestVariable $Body 'input.projectId') -eq 'project-mobile'
             }
+            { Set-LinearDocument -Id doc-plan -Team OPS } | Should -Throw -ErrorId 'NamedParameterNotFound*'
         }
 
         It 'clears the owner' {
@@ -224,8 +241,8 @@ Describe 'Document commands' {
         }
 
         It 'rejects conflicting parameters, or no change at all, before sending anything' {
-            { Set-LinearDocument -Id doc-plan -Project Website -Team OPS } |
-                Should -Throw -ErrorId 'PSLinear.InvalidArgument*' -ExpectedMessage '*Use only one of -Project, -Team.'
+            { Set-LinearDocument -Id doc-plan -Issue ENG-1 -Project Website } |
+                Should -Throw -ErrorId 'PSLinear.InvalidArgument*' -ExpectedMessage 'Use either -Issue or -Project, not both.'
             { Set-LinearDocument -Id doc-plan -Clear Owner -Owner me } | Should -Throw -ExpectedMessage 'Use either -Clear Owner or -Owner, not both.'
             { Set-LinearDocument -Id doc-plan } | Should -Throw -ErrorId 'PSLinear.InvalidArgument*'
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 0 -Exactly

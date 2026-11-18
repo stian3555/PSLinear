@@ -32,8 +32,4 @@ fragment DocumentFields on Document {
     id
     name
   }
-  team {
-    id
-    key
-  }
 }

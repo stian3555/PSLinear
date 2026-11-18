@@ -424,8 +424,8 @@ Run `Get-Help <command> -Full` for every parameter and more examples.
 | Command | Description |
 | --- | --- |
 | `Get-LinearDocument` | Documents of an issue, project, initiative or team, or all of them, most recently updated first; `-Id` for the content. |
-| `New-LinearDocument` | Create a document in an issue, project, initiative or team. |
-| `Set-LinearDocument` | Rename a document, replace its content, change its owner or move it. |
+| `New-LinearDocument` | Create a document in an issue or project. |
+| `Set-LinearDocument` | Rename a document, replace its content, change its owner or move it to an issue or project. |
 | `Remove-LinearDocument` | Move documents to the trash. |
 
 ### Teams, users and labels

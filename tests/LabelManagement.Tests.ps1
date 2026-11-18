@@ -22,7 +22,10 @@ Describe 'Label management commands' {
             @(Get-LinearLabel).Name | Should -Not -Contain 'Area'
             @(Get-LinearLabel -IncludeGroups).Name | Should -Contain 'Area'
             @(Get-LinearLabel -IncludeGroups).Name | Should -Not -Contain 'Old'
-            (Get-LinearLabel -IncludeRetired -Name Old).RetiredAt | Should -Not -BeNullOrEmpty
+            $retired = Get-LinearLabel -IncludeRetired -Name Old
+            $retired.IsRetired | Should -BeTrue
+            $retired.RetiredBy | Should -Be 'Ada Lovelace'
+            (Get-LinearLabel -Name Bug).IsRetired | Should -BeFalse
             (Get-LinearLabel -IncludeGroups -Name Area).IsGroup | Should -BeTrue
         }
 
@@ -119,7 +122,7 @@ Describe 'Label management commands' {
         }
 
         It 'retires and restores labels, and moves them in and out of groups' {
-            Set-LinearLabel Bug -Retire
+            (Set-LinearLabel Bug -Retire -PassThru).IsRetired | Should -BeTrue
             Should -Invoke Send-LinearHttpRequest -ModuleName PSLinear -Times 1 -Exactly -ParameterFilter {
                 # ConvertFrom-Json turns the ISO 8601 timestamp back into a DateTime.
                 $retiredAt = Get-RequestVariable $Body 'input.retiredAt'

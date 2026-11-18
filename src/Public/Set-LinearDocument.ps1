@@ -5,9 +5,9 @@ function Set-LinearDocument {
 
     .DESCRIPTION
         Updates documents given by id, slug id or URL, or piped in from Get-LinearDocument:
-        their title, content or owner, or moves them to another issue, project, initiative or
-        team (a moved document leaves its current one). Nothing is returned unless you use
-        -PassThru.
+        their title, content or owner, or moves them to another issue or project (a moved
+        document leaves its current one). Linear's public API no longer moves documents to teams
+        or initiatives. Nothing is returned unless you use -PassThru.
 
         -Content replaces the whole document. To append, read the current content first (see the
         examples).
@@ -36,13 +36,6 @@ function Set-LinearDocument {
 
     .PARAMETER Project
         Moves the documents to this project: a name, slug id, URL or id.
-
-    .PARAMETER Initiative
-        Moves the documents to this initiative: a name, slug id, URL or id.
-
-    .PARAMETER Team
-        Moves the documents to this team: a team key, name or id. Supports tab completion once
-        connected.
 
     .PARAMETER Clear
         Removes values: Owner.
@@ -104,12 +97,6 @@ function Set-LinearDocument {
         [ValidateNotNullOrEmpty()]
         [string] $Project,
 
-        [ValidateNotNullOrEmpty()]
-        [string] $Initiative,
-
-        [ValidateNotNullOrEmpty()]
-        [string] $Team,
-
         [ValidateSet('Owner')]
         [string[]] $Clear,
 
@@ -117,10 +104,10 @@ function Set-LinearDocument {
     )
 
     begin {
-        $changes = Format-LinearChangeList -BoundParameters $PSBoundParameters -Name 'Title', 'Content', 'Owner', 'Issue', 'Project', 'Initiative', 'Team', 'Clear'
-        $moves = @(foreach ($kind in 'Issue', 'Project', 'Initiative', 'Team') { if ($PSBoundParameters.ContainsKey($kind)) { $kind } })
+        $changes = Format-LinearChangeList -BoundParameters $PSBoundParameters -Name 'Title', 'Content', 'Owner', 'Issue', 'Project', 'Clear'
+        $moves = @(foreach ($kind in 'Issue', 'Project') { if ($PSBoundParameters.ContainsKey($kind)) { $kind } })
         $invalidMessage = if ($moves.Count -gt 1) {
-            "A document belongs to one issue, project, initiative or team. Use only one of -$($moves -join ', -')."
+            'Use either -Issue or -Project, not both.'
         }
         elseif ($Clear -contains 'Owner' -and $Owner) {
             'Use either -Clear Owner or -Owner, not both.'
@@ -152,7 +139,7 @@ function Set-LinearDocument {
                     if ($Owner) { $documentInput['ownerId'] = Resolve-LinearUserId -User $Owner }
                     if ($Clear -contains 'Owner') { $documentInput['ownerId'] = $null }
                     if ($moves.Count -eq 1) {
-                        $container = Get-LinearDocumentContainer -Issue $Issue -Project $Project -Initiative $Initiative -Team $Team -Resolve
+                        $container = Get-LinearDocumentContainer -Issue $Issue -Project $Project -Resolve
                         $documentInput[$container.Field] = $container.Id
                     }
                 }
