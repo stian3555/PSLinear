@@ -6,6 +6,8 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-18
+
 ### Fixed
 
 - The document and label commands work again. In November 2026 Linear removed the fields it
@@ -241,7 +243,8 @@ First stable release. It includes everything in 0.1.0-preview1, plus the changes
 - Formatting views for issues, teams, users, workflow states, labels, projects, cycles, the
   connection and rate-limit status.
 
-[Unreleased]: https://github.com/stian3555/PSLinear/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/stian3555/PSLinear/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/stian3555/PSLinear/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/stian3555/PSLinear/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/stian3555/PSLinear/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/stian3555/PSLinear/compare/v0.1.0-preview1...v0.1.0
