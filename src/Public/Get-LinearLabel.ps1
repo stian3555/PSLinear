@@ -23,7 +23,9 @@ function Get-LinearLabel {
         issues.
 
     .PARAMETER IncludeRetired
-        Also returns retired labels (RetiredAt), which can no longer be applied to new issues.
+        Also returns retired labels (IsRetired), which can no longer be applied to new issues.
+        Linear reports who retired a label, not when. When it did not record who retired a label,
+        or that account was deleted, the label shows as active.
 
     .EXAMPLE
         Get-LinearLabel

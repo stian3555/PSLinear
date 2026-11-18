@@ -150,6 +150,10 @@ function ConvertTo-LinearLabel {
     <#
     .SYNOPSIS
         Flattens an IssueLabel node into a PSLinear.Label object. Team is $null for workspace labels.
+    .NOTES
+        Linear's public API reports who retired a label, not when, so IsRetired is based on
+        retiredBy. For an issue label Linear leaves retiredBy empty when it did not record who
+        retired it or that account was deleted, and such a retired label shows as active.
     #>
     [CmdletBinding()]
     [OutputType('PSLinear.Label')]
@@ -170,10 +174,12 @@ function ConvertTo-LinearLabel {
             Color           = Get-LinearNestedValue -InputObject $InputObject -Name 'color'
             Description     = Get-LinearNestedValue -InputObject $InputObject -Name 'description'
             IsGroup         = [bool](Get-LinearNestedValue -InputObject $InputObject -Name 'isGroup')
-            RetiredAt       = Get-LinearNestedValue -InputObject $InputObject -Name 'retiredAt'
+            IsRetired       = $null -ne (Get-LinearNestedValue -InputObject $InputObject -Name 'retiredBy')
+            RetiredBy       = Get-LinearNestedValue -InputObject $InputObject -Name 'retiredBy.name'
             TeamId          = Get-LinearNestedValue -InputObject $InputObject -Name 'team.id'
             GroupId         = Get-LinearNestedValue -InputObject $InputObject -Name 'parent.id'
             InheritedFromId = Get-LinearNestedValue -InputObject $InputObject -Name 'inheritedFrom.id'
+            RetiredById     = Get-LinearNestedValue -InputObject $InputObject -Name 'retiredBy.id'
         }
     }
 }
@@ -424,9 +430,10 @@ function ConvertTo-LinearDocument {
     .SYNOPSIS
         Flattens a Document node (DocumentFields fragment) into a PSLinear.Document object.
     .NOTES
-        Container names what the document belongs to (an issue identifier, a project or
-        initiative name, or a team key) and ContainerType says which. Content is only filled for
-        a single document (GetDocument, create and update); it is $null in lists.
+        Container names what the document belongs to (an issue identifier, or a project or
+        initiative name) and ContainerType says which. Linear's public API no longer reports a
+        document's team, so both are $null for team documents. Content is only filled for a
+        single document (GetDocument, create and update); it is $null in lists.
     #>
     [CmdletBinding()]
     [OutputType('PSLinear.Document')]
@@ -443,8 +450,7 @@ function ConvertTo-LinearDocument {
         foreach ($candidate in @(
                 @('issue.identifier', 'Issue'),
                 @('project.name', 'Project'),
-                @('initiative.name', 'Initiative'),
-                @('team.key', 'Team')
+                @('initiative.name', 'Initiative')
             )) {
             $value = Get-LinearNestedValue -InputObject $node -Name $candidate[0]
             if ($value) {
@@ -472,7 +478,6 @@ function ConvertTo-LinearDocument {
             IssueId           = Get-LinearNestedValue -InputObject $node -Name 'issue.id'
             ProjectId         = Get-LinearNestedValue -InputObject $node -Name 'project.id'
             InitiativeId      = Get-LinearNestedValue -InputObject $node -Name 'initiative.id'
-            TeamId            = Get-LinearNestedValue -InputObject $node -Name 'team.id'
             OwnerId           = Get-LinearNestedValue -InputObject $node -Name 'owner.id'
             CreatorId         = Get-LinearNestedValue -InputObject $node -Name 'creator.id'
             DocumentContentId = Get-LinearNestedValue -InputObject $node -Name 'documentContentId'

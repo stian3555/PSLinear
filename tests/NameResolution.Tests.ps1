@@ -148,7 +148,7 @@ Describe 'Name resolution' {
                 $nodes = foreach ($label in $all) {
                     if ($null -ne $label.team -and $label.team.id -notin $teamIds) { continue }
                     $label['isGroup'] = $false
-                    $label['retiredAt'] = $null
+                    $label['retiredBy'] = $null
                     $label['parent'] = $null
                     $label
                 }

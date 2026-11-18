@@ -54,7 +54,7 @@ function Get-LinearLabelList {
     }
     $labels = @(Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListIssueLabels') -ConnectionPath 'issueLabels' -Limit 0 -Variables $variables |
             ConvertTo-LinearLabel |
-            Where-Object { $null -ne $_ -and ($IncludeGroups -or -not $_.IsGroup) -and ($IncludeRetired -or $null -eq $_.RetiredAt) })
+            Where-Object { $null -ne $_ -and ($IncludeGroups -or -not $_.IsGroup) -and ($IncludeRetired -or -not $_.IsRetired) })
     if ($TeamId) {
         $replaced = @($labels | ForEach-Object InheritedFromId | Where-Object { $_ })
         $labels = @($labels | Where-Object { $_.Id -notin $replaced })

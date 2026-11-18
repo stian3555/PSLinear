@@ -4,7 +4,10 @@ fragment IssueLabelFields on IssueLabel {
   color
   description
   isGroup
-  retiredAt
+  retiredBy {
+    id
+    name
+  }
   parent {
     id
     name

@@ -4,7 +4,9 @@ query ListInitiativeLabels($first: Int, $after: String) {
       id
       name
       isGroup
-      retiredAt
+      retiredBy {
+        id
+      }
       parent {
         name
       }

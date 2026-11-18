@@ -4,11 +4,13 @@ function New-LinearDocument {
         Creates a Linear document.
 
     .DESCRIPTION
-        Creates a document in an issue, a project, an initiative or a team, and returns it with
-        its content. A document belongs to exactly one of them. Give it with -Issue, -Project,
-        -Initiative or -Team, or pipe in the issue, project, initiative or team. Names are
+        Creates a document in an issue or a project, and returns it with its content. Give the
+        container with -Issue or -Project, or pipe in the issue or project. Project names are
         resolved to ids for you; an unknown name stops the command with an error that lists the
         valid values. With -WhatIf nothing is sent, not even the name lookups.
+
+        Linear's public API no longer creates documents in teams or initiatives. Their existing
+        documents can still be listed with Get-LinearDocument and changed with Set-LinearDocument.
 
     .PARAMETER Title
         The document title.
@@ -22,15 +24,8 @@ function New-LinearDocument {
     .PARAMETER Project
         The project: a name, slug id, URL or id.
 
-    .PARAMETER Initiative
-        The initiative: a name, slug id, URL or id.
-
-    .PARAMETER Team
-        The team: a team key, name or id. Supports tab completion once connected.
-
     .PARAMETER InputObject
-        A PSLinear.Issue, PSLinear.Project, PSLinear.Initiative or PSLinear.Team object to create
-        the document in.
+        A PSLinear.Issue or PSLinear.Project object to create the document in.
 
     .PARAMETER Owner
         The document owner: 'me', an email address, a user id, or the user's full name or display
@@ -47,15 +42,13 @@ function New-LinearDocument {
         Creates a document on an issue.
 
     .EXAMPLE
-        New-LinearDocument 'On-call handbook' -Team OPS -Owner me
+        New-LinearDocument 'Postmortem' -Issue ENG-123 -Owner me
 
-        Creates a team document that you own.
+        Creates a document on an issue, owned by you.
 
     .INPUTS
         PSLinear.Issue
         PSLinear.Project
-        PSLinear.Initiative
-        PSLinear.Team
 
     .OUTPUTS
         PSLinear.Document
@@ -84,14 +77,6 @@ function New-LinearDocument {
         [ValidateNotNullOrEmpty()]
         [string] $Project,
 
-        [Parameter(Mandatory, ParameterSetName = 'Initiative')]
-        [ValidateNotNullOrEmpty()]
-        [string] $Initiative,
-
-        [Parameter(Mandatory, ParameterSetName = 'Team')]
-        [ValidateNotNullOrEmpty()]
-        [string] $Team,
-
         [Parameter(Mandatory, ValueFromPipeline, ParameterSetName = 'ByObject')]
         [object] $InputObject,
 
@@ -101,7 +86,7 @@ function New-LinearDocument {
 
     process {
         try {
-            $container = Get-LinearDocumentContainer -Issue $Issue -Project $Project -Initiative $Initiative -Team $Team -InputObject $InputObject
+            $container = Get-LinearDocumentContainer -Issue $Issue -Project $Project -InputObject $InputObject -ForWrite
         }
         catch {
             $PSCmdlet.ThrowTerminatingError($_)
@@ -114,7 +99,7 @@ function New-LinearDocument {
 
         try {
             if (-not $container.Id) {
-                $container = Get-LinearDocumentContainer -Issue $Issue -Project $Project -Initiative $Initiative -Team $Team -Resolve
+                $container = Get-LinearDocumentContainer -Issue $Issue -Project $Project -Resolve
             }
             $documentInput = @{ title = $Title }
             $documentInput[$container.Field] = $container.Id

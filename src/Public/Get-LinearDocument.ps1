@@ -12,6 +12,9 @@ function Get-LinearDocument {
         Use -Id, or pipe in documents, to get the full document with its Markdown content. Pipe
         in issues, projects, initiatives or teams to list their documents.
 
+        Linear's public API no longer reports a document's team, so Container and ContainerType
+        are empty for team documents. -Team still finds them.
+
     .PARAMETER Title
         One or more document titles. Wildcards are supported.
 
@@ -151,7 +154,7 @@ function Get-LinearDocument {
 
         $query = Get-LinearGraphQLDocument -Name 'ListDocuments'
         foreach ($container in $containers) {
-            $filter = @{ ($container.Field -replace 'Id$') = @{ id = @{ eq = $container.Id } } }
+            $filter = @{ $container.Filter = @{ id = @{ eq = $container.Id } } }
             Invoke-LinearPagedRequest -Query $query -ConnectionPath 'documents' -Variables @{ filter = $filter } -Limit 0 | ConvertTo-LinearDocument
         }
         if ($PSCmdlet.ParameterSetName -ne 'List') { return }

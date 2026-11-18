@@ -6,6 +6,34 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- The document and label commands work again. In November 2026 Linear removed the fields it
+  marks as internal from its public API, and requests that still asked for them failed with
+  `Cannot query field`. Asking for a document's team broke `Get-LinearDocument`,
+  `New-LinearDocument`, `Set-LinearDocument`, and `Get-LinearComment` and `Add-LinearComment`
+  with `-Document`. Asking when a label was retired broke `Get-LinearLabel`, `New-LinearLabel`,
+  `Set-LinearLabel` and `Remove-LinearLabel`, and label names given to `New-LinearIssue`,
+  `Set-LinearIssue`, `New-LinearProject`, `Set-LinearProject`, `New-LinearInitiative` and
+  `Set-LinearInitiative`.
+
+### Changed
+
+- `PSLinear.Label` has `IsRetired` and `RetiredBy` (with `RetiredById`) instead of
+  `RetiredAt`. Linear's public API reports who retired a label, not when. When Linear did not
+  record who retired an issue label, or that account was deleted, the label shows as active.
+- `Container` and `ContainerType` of a `PSLinear.Document` are empty for team documents,
+  because Linear's public API no longer reports a document's team.
+
+### Removed
+
+- `New-LinearDocument` and `Set-LinearDocument` no longer take `-Team` or `-Initiative`, and
+  `New-LinearDocument` stops with an error for piped teams and initiatives: Linear's public
+  API only creates documents in, and moves them to, issues and projects. Existing team and
+  initiative documents can still be listed with `Get-LinearDocument -Team` or `-Initiative`,
+  and changed with `Set-LinearDocument`.
+- The `TeamId` property of `PSLinear.Document`.
+
 ## [0.3.0] - 2026-10-23
 
 ### Added

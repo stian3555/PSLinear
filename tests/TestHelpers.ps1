@@ -206,14 +206,14 @@ function Get-LinearTestLookupResponse {
         $opsTeam = @{ id = 'team-ops'; key = 'OPS' }
         $areaGroup = @{ id = 'label-area'; name = 'Area' }
         $all = @(
-            @{ id = 'label-bug'; name = 'Bug'; isGroup = $false; retiredAt = $null; parent = $null; team = $null }
-            @{ id = 'label-feature'; name = 'Feature'; isGroup = $false; retiredAt = $null; parent = $null; team = $null }
-            @{ id = 'label-area'; name = 'Area'; isGroup = $true; retiredAt = $null; parent = $null; team = $null }
-            @{ id = 'label-frontend'; name = 'Frontend'; isGroup = $false; retiredAt = $null; parent = $areaGroup; team = $null }
-            @{ id = 'label-old'; name = 'Old'; isGroup = $false; retiredAt = '2026-01-01T00:00:00.000Z'; parent = $null; team = $null }
-            @{ id = 'label-eng-backend'; name = 'Backend'; isGroup = $false; retiredAt = $null; parent = $null; team = $engTeam }
-            @{ id = 'label-ops-incident'; name = 'Incident'; isGroup = $false; retiredAt = $null; parent = $null; team = $opsTeam }
-            @{ id = 'label-ops-frontend'; name = 'Frontend'; isGroup = $false; retiredAt = $null; parent = $null; team = $opsTeam }
+            @{ id = 'label-bug'; name = 'Bug'; isGroup = $false; retiredBy = $null; parent = $null; team = $null }
+            @{ id = 'label-feature'; name = 'Feature'; isGroup = $false; retiredBy = $null; parent = $null; team = $null }
+            @{ id = 'label-area'; name = 'Area'; isGroup = $true; retiredBy = $null; parent = $null; team = $null }
+            @{ id = 'label-frontend'; name = 'Frontend'; isGroup = $false; retiredBy = $null; parent = $areaGroup; team = $null }
+            @{ id = 'label-old'; name = 'Old'; isGroup = $false; retiredBy = @{ id = 'user-ada'; name = 'Ada Lovelace' }; parent = $null; team = $null }
+            @{ id = 'label-eng-backend'; name = 'Backend'; isGroup = $false; retiredBy = $null; parent = $null; team = $engTeam }
+            @{ id = 'label-ops-incident'; name = 'Incident'; isGroup = $false; retiredBy = $null; parent = $null; team = $opsTeam }
+            @{ id = 'label-ops-frontend'; name = 'Frontend'; isGroup = $false; retiredBy = $null; parent = $null; team = $opsTeam }
         )
         $nodes = foreach ($label in $all) {
             if ($null -ne $filter) {
@@ -276,12 +276,12 @@ function Get-LinearTestLookupResponse {
         $themeGroup = @{ name = 'Theme' }
         return New-LinearTestResponse -Data @{
             projectLabels = New-LinearTestConnection -Nodes @(
-                @{ id = 'plabel-infra'; name = 'Infrastructure'; isGroup = $false; retiredAt = $null; parent = $null; team = $null }
-                @{ id = 'plabel-customer'; name = 'Customer'; isGroup = $false; retiredAt = $null; parent = $null; team = $null }
-                @{ id = 'plabel-theme'; name = 'Theme'; isGroup = $true; retiredAt = $null; parent = $null; team = $null }
-                @{ id = 'plabel-growth'; name = 'Growth'; isGroup = $false; retiredAt = $null; parent = $themeGroup; team = $null }
-                @{ id = 'plabel-eng-growth'; name = 'Growth'; isGroup = $false; retiredAt = $null; parent = $null; team = @{ id = 'team-eng'; key = 'ENG' } }
-                @{ id = 'plabel-old'; name = 'Old'; isGroup = $false; retiredAt = '2026-01-01T00:00:00.000Z'; parent = $null; team = $null }
+                @{ id = 'plabel-infra'; name = 'Infrastructure'; isGroup = $false; retiredBy = $null; parent = $null; team = $null }
+                @{ id = 'plabel-customer'; name = 'Customer'; isGroup = $false; retiredBy = $null; parent = $null; team = $null }
+                @{ id = 'plabel-theme'; name = 'Theme'; isGroup = $true; retiredBy = $null; parent = $null; team = $null }
+                @{ id = 'plabel-growth'; name = 'Growth'; isGroup = $false; retiredBy = $null; parent = $themeGroup; team = $null }
+                @{ id = 'plabel-eng-growth'; name = 'Growth'; isGroup = $false; retiredBy = $null; parent = $null; team = @{ id = 'team-eng'; key = 'ENG' } }
+                @{ id = 'plabel-old'; name = 'Old'; isGroup = $false; retiredBy = @{ id = 'user-ada'; name = 'Ada Lovelace' }; parent = $null; team = $null }
             )
         }
     }
@@ -295,11 +295,11 @@ function Get-LinearTestLookupResponse {
     if ($query -match 'query ListInitiativeLabels') {
         return New-LinearTestResponse -Data @{
             initiativeLabels = New-LinearTestConnection -Nodes @(
-                @{ id = 'ilabel-strategic'; name = 'Strategic'; isGroup = $false; retiredAt = $null; parent = $null }
-                @{ id = 'ilabel-bets'; name = 'Bets'; isGroup = $false; retiredAt = $null; parent = $null }
-                @{ id = 'ilabel-horizon'; name = 'Horizon'; isGroup = $true; retiredAt = $null; parent = $null }
-                @{ id = 'ilabel-now'; name = 'Now'; isGroup = $false; retiredAt = $null; parent = @{ name = 'Horizon' } }
-                @{ id = 'ilabel-legacy'; name = 'Legacy'; isGroup = $false; retiredAt = '2026-01-01T00:00:00.000Z'; parent = $null }
+                @{ id = 'ilabel-strategic'; name = 'Strategic'; isGroup = $false; retiredBy = $null; parent = $null }
+                @{ id = 'ilabel-bets'; name = 'Bets'; isGroup = $false; retiredBy = $null; parent = $null }
+                @{ id = 'ilabel-horizon'; name = 'Horizon'; isGroup = $true; retiredBy = $null; parent = $null }
+                @{ id = 'ilabel-now'; name = 'Now'; isGroup = $false; retiredBy = $null; parent = @{ name = 'Horizon' } }
+                @{ id = 'ilabel-legacy'; name = 'Legacy'; isGroup = $false; retiredBy = @{ id = 'user-ada'; name = 'Ada Lovelace' }; parent = $null }
             )
         }
     }
@@ -1124,10 +1124,12 @@ function Get-LinearTestInitiativeResponse {
 function New-LinearTestDocumentNode {
     # Returns one of the fixture documents (doc-plan, doc-notes, doc-handbook, doc-goals, doc-old)
     # as Linear sends it. -Detail adds the content. -Change applies a DocumentCreateInput or
-    # DocumentUpdateInput hashtable to it.
+    # DocumentUpdateInput hashtable to it. -WithTeam adds the team, which Linear no longer
+    # returns but still filters on; only Test-LinearTestDocumentFilter needs it.
     param(
         [Parameter(Mandatory)][string] $Id,
         [switch] $Detail,
+        [switch] $WithTeam,
         [System.Collections.IDictionary] $Change = @{}
     )
     $users = @{ 'user-ada' = @{ id = 'user-ada'; name = 'Ada Lovelace' }; 'user-grace' = @{ id = 'user-grace'; name = 'Grace Hopper' } }
@@ -1163,14 +1165,15 @@ function New-LinearTestDocumentNode {
         project           = if ($values['projectId']) { @{ id = $values['projectId']; name = $(if ($values['projectId'] -eq 'project-mobile') { 'Mobile App' } else { 'Website' }) } } else { $null }
         issue             = if ($values['issueId']) { @{ id = "issue-uuid-$issueKey"; identifier = $issueKey } } else { $null }
         initiative        = if ($values['initiativeId']) { @{ id = $values['initiativeId']; name = 'Q1 growth' } } else { $null }
-        team              = if ($values['teamId']) { @{ id = $values['teamId']; key = $(if ($values['teamId'] -eq 'team-ops') { 'OPS' } else { 'ENG' }) } } else { $null }
     }
     if ($Detail) { $node['content'] = $values.content }
+    if ($WithTeam) { $node['team'] = if ($values['teamId']) { @{ id = $values['teamId'] } } else { $null } }
     $node
 }
 
 function Test-LinearTestDocumentFilter {
-    # Whether a fixture document node matches a DocumentFilter (container conditions, possibly under 'and').
+    # Whether a fixture document node (built with -WithTeam) matches a DocumentFilter (container
+    # conditions, possibly under 'and').
     param([Parameter(Mandatory)] $Node, [AllowNull()] $Filter)
     if ($null -eq $Filter) { return $true }
     if ($Filter.Contains('and')) {
@@ -1211,8 +1214,9 @@ function Get-LinearTestDocumentResponse {
         $filter = if ($variables.Contains('filter')) { $variables['filter'] } else { $null }
         $nodes = @(foreach ($id in $ids) {
                 if ($id -eq 'doc-old' -and $variables['includeArchived'] -ne $true) { continue }
-                $node = New-LinearTestDocumentNode -Id $id
-                if (Test-LinearTestDocumentFilter -Node $node -Filter $filter) { $node }
+                if (Test-LinearTestDocumentFilter -Node (New-LinearTestDocumentNode -Id $id -WithTeam) -Filter $filter) {
+                    New-LinearTestDocumentNode -Id $id
+                }
             })
         return New-LinearTestResponse -Data @{ documents = New-LinearTestConnection -Nodes $nodes }
     }
@@ -1297,7 +1301,7 @@ function Get-LinearTestManagementResponse {
             color         = $(if ($Values['color']) { $Values['color'] } else { '#000000' })
             description   = $Values['description']
             isGroup       = [bool]$Values['isGroup']
-            retiredAt     = $Values['retiredAt']
+            retiredBy     = $(if ($Values['retiredAt']) { @{ id = 'user-ada'; name = 'Ada Lovelace' } } else { $null })
             parent        = $(if ($Values['parentId']) { @{ id = $Values['parentId']; name = $groups[$Values['parentId']] } } else { $null })
             inheritedFrom = $null
             team          = $(if ($Values['teamId']) { @{ id = $Values['teamId']; key = $teams[$Values['teamId']] } } else { $null })

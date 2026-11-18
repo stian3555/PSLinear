@@ -69,11 +69,15 @@ function Get-LinearDocumentTarget {
 function Get-LinearDocumentContainer {
     <#
     .SYNOPSIS
-        Works out what a document belongs to: an issue, a project, an initiative or a team.
+        Works out which issue, project, initiative or team a document belongs to.
     .DESCRIPTION
-        Returns [pscustomobject]@{ Kind; Field; Id; Name }, or nothing when no container is given.
-        Field is the DocumentCreateInput or DocumentUpdateInput field (issueId, projectId,
-        initiativeId or teamId) and Id its value. Name is for messages.
+        Returns [pscustomobject]@{ Kind; Filter; Field; Id; Name }, or nothing when no container
+        is given. Filter is the DocumentFilter field (issue, project, initiative or team). Field
+        is the DocumentCreateInput or DocumentUpdateInput field (issueId or projectId), and $null
+        for initiatives and teams: Linear's public API lists their documents, but no longer
+        creates or moves documents into them. Id is the value for either. Name is for messages.
+
+        -ForWrite accepts only containers that can receive documents (issues and projects).
 
         Without -Resolve no request is sent, so it is safe before ShouldProcess; names then have
         no Id yet. Issues need no lookup: Linear accepts identifiers such as ENG-123.
@@ -88,53 +92,53 @@ function Get-LinearDocumentContainer {
 
         [string] $Project,
 
-        [string] $Initiative,
-
-        [string] $Team,
-
         [AllowNull()]
         [object] $InputObject,
 
-        [switch] $Resolve
+        [switch] $Resolve,
+
+        [switch] $ForWrite
     )
 
     if ($Issue) {
         $identifier = ConvertTo-LinearIssueIdentifier -Value $Issue
-        return [pscustomobject]@{ Kind = 'Issue'; Field = 'issueId'; Id = $identifier; Name = $identifier }
+        return [pscustomobject]@{ Kind = 'Issue'; Filter = 'issue'; Field = 'issueId'; Id = $identifier; Name = $identifier }
     }
     if ($Project) {
         $projectId = if ($Resolve) { Resolve-LinearProjectId -Project $Project } else { $null }
-        return [pscustomobject]@{ Kind = 'Project'; Field = 'projectId'; Id = $projectId; Name = "project '$Project'" }
+        return [pscustomobject]@{ Kind = 'Project'; Filter = 'project'; Field = 'projectId'; Id = $projectId; Name = "project '$Project'" }
     }
-    if ($Initiative) {
-        $initiativeId = if ($Resolve) { Resolve-LinearInitiativeId -Initiative $Initiative } else { $null }
-        return [pscustomobject]@{ Kind = 'Initiative'; Field = 'initiativeId'; Id = $initiativeId; Name = "initiative '$Initiative'" }
+    if ($null -eq $InputObject) { return }
+
+    $typeNames = @($InputObject.PSObject.TypeNames)
+    $objectId = Get-LinearNestedValue -InputObject $InputObject -Name 'Id'
+    $name = Get-LinearNestedValue -InputObject $InputObject -Name 'Name'
+    $container = if ($typeNames -contains 'PSLinear.Issue') {
+        $identifier = Get-LinearNestedValue -InputObject $InputObject -Name 'Identifier'
+        [pscustomobject]@{ Kind = 'Issue'; Filter = 'issue'; Field = 'issueId'; Id = $objectId; Name = $(if ($identifier) { $identifier } else { $objectId }) }
     }
-    if ($Team) {
-        $teamId = if ($Resolve) { Resolve-LinearTeamId -Team $Team } else { $null }
-        return [pscustomobject]@{ Kind = 'Team'; Field = 'teamId'; Id = $teamId; Name = "team $Team" }
+    elseif ($typeNames -contains 'PSLinear.Project') {
+        [pscustomobject]@{ Kind = 'Project'; Filter = 'project'; Field = 'projectId'; Id = $objectId; Name = "project '$(if ($name) { $name } else { $objectId })'" }
+    }
+    elseif ($typeNames -contains 'PSLinear.Initiative') {
+        [pscustomobject]@{ Kind = 'Initiative'; Filter = 'initiative'; Field = $null; Id = $objectId; Name = "initiative '$(if ($name) { $name } else { $objectId })'" }
+    }
+    elseif ($typeNames -contains 'PSLinear.Team') {
+        $key = Get-LinearNestedValue -InputObject $InputObject -Name 'Key'
+        [pscustomobject]@{ Kind = 'Team'; Filter = 'team'; Field = $null; Id = $objectId; Name = "team $(if ($key) { $key } else { $objectId })" }
     }
 
-    if ($null -ne $InputObject) {
-        $typeNames = @($InputObject.PSObject.TypeNames)
-        $objectId = Get-LinearNestedValue -InputObject $InputObject -Name 'Id'
-        $name = Get-LinearNestedValue -InputObject $InputObject -Name 'Name'
-        if ($typeNames -contains 'PSLinear.Issue') {
-            $identifier = Get-LinearNestedValue -InputObject $InputObject -Name 'Identifier'
-            return [pscustomobject]@{ Kind = 'Issue'; Field = 'issueId'; Id = $objectId; Name = $(if ($identifier) { $identifier } else { $objectId }) }
-        }
-        if ($typeNames -contains 'PSLinear.Project') {
-            return [pscustomobject]@{ Kind = 'Project'; Field = 'projectId'; Id = $objectId; Name = "project '$(if ($name) { $name } else { $objectId })'" }
-        }
-        if ($typeNames -contains 'PSLinear.Initiative') {
-            return [pscustomobject]@{ Kind = 'Initiative'; Field = 'initiativeId'; Id = $objectId; Name = "initiative '$(if ($name) { $name } else { $objectId })'" }
-        }
-        if ($typeNames -contains 'PSLinear.Team') {
-            $key = Get-LinearNestedValue -InputObject $InputObject -Name 'Key'
-            return [pscustomobject]@{ Kind = 'Team'; Field = 'teamId'; Id = $objectId; Name = "team $(if ($key) { $key } else { $objectId })" }
-        }
-        throw (New-LinearErrorRecord -Message ('Documents belong to an issue, a project, an initiative or a team. Pipe in PSLinear.Issue, ' +
-                'PSLinear.Project, PSLinear.Initiative or PSLinear.Team objects.') `
-                -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument -TargetObject $InputObject)
+    $message = if ($null -eq $container -and $ForWrite) {
+        'Documents are created in an issue or a project. Pipe in PSLinear.Issue or PSLinear.Project objects.'
     }
+    elseif ($null -eq $container) {
+        'Documents belong to an issue, a project, an initiative or a team. Pipe in PSLinear.Issue, PSLinear.Project, PSLinear.Initiative or PSLinear.Team objects.'
+    }
+    elseif ($ForWrite -and $null -eq $container.Field) {
+        "Linear's API no longer creates documents in teams or initiatives, so $($container.Name) cannot hold a new document. Use an issue or a project."
+    }
+    if ($message) {
+        throw (New-LinearErrorRecord -Message $message -ErrorId 'PSLinear.InvalidArgument' -Category InvalidArgument -TargetObject $InputObject)
+    }
+    $container
 }

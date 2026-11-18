@@ -156,7 +156,7 @@ function Get-LinearProjectLabelCache {
 
     if ($Refresh -or $null -eq $script:LinearProjectLabelCache -or [datetime]::UtcNow -ge $script:LinearProjectLabelCacheExpires) {
         $script:LinearProjectLabelCache = @(Invoke-LinearPagedRequest -Query (Get-LinearGraphQLDocument -Name 'ListProjectLabels') -ConnectionPath 'projectLabels' -Limit 0 |
-                Where-Object { $null -ne $_ -and -not $_.isGroup -and $null -eq (Get-LinearNestedValue -InputObject $_ -Name 'retiredAt') } |
+                Where-Object { $null -ne $_ -and -not $_.isGroup -and $null -eq (Get-LinearNestedValue -InputObject $_ -Name 'retiredBy') } |
                 ForEach-Object {
                     [pscustomobject]@{
                         PSTypeName = 'PSLinear.ProjectLabel'
